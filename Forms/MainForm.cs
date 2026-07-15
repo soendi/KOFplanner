@@ -776,63 +776,64 @@ public class MainForm : Form
 
         using var f = new Form();
         f.Text = $"Übersicht {day:dd.MM.yyyy}";
-        f.Size = new Size(460, 560);
-        f.MinimumSize = new Size(380, 320);
+        f.Size = new Size(520, 600);
+        f.MinimumSize = new Size(420, 320);
         f.StartPosition = FormStartPosition.CenterParent;
         f.Font = Font;
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = f.Height - 60, IsSplitterFixed = true };
+        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = f.Height - 54, IsSplitterFixed = true };
         var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(16) };
         var bottom = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
-        var btnClose = new Button { Text = "Schliessen", Dock = DockStyle.Right, Width = 110, Height = 34 };
+        var btnClose = new Button { Text = "Schliessen", Dock = DockStyle.Right, Width = 120, Height = 34 };
         StyleButton(btnClose);
         btnClose.Click += (_, _) => f.Close();
-        var btnDelete = new Button { Text = "Löschen", Dock = DockStyle.Left, Width = 110, Height = 34, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
-        StyleButton(btnDelete);
-        bottom.Controls.AddRange(new Control[] { btnDelete, btnClose });
+        bottom.Controls.Add(btnClose);
 
-        var entries = BuildDayEntries(das);
-
-        AssignmentEntry? selected = null;
-        var entryPanels = new List<(Panel panel, AssignmentEntry entry)>();
-
-        void SelectEntry(AssignmentEntry entry, Panel panel)
-        {
-            selected = entry;
-            foreach (var (p, _) in entryPanels)
-                p.BackColor = SystemColors.Window;
-            panel.BackColor = Color.FromArgb(0xC8, 0xE6, 0xC9);
-        }
-
-        if (entries.Count == 0)
+        if (das.Count == 0)
         {
             flow.Controls.Add(new Label { Text = "Keine Einträge an diesem Tag.", ForeColor = SystemColors.GrayText, AutoSize = true });
         }
         else
         {
-            foreach (var entry in entries)
-            {
-                var span = entry.From == entry.To
-                    ? $"{entry.From:dd.MM.yyyy}"
-                    : $"{entry.From:dd.MM.yyyy} – {entry.To:dd.MM.yyyy}";
-                var text = entry.Label + "\n" + (entry.From == entry.To ? $"am {span}" : $"von {span}");
+            var sites = das.Select(a => a.Site ?? _sites.FirstOrDefault(s => s.Id == a.ConstructionSiteId))
+                           .OfType<ConstructionSite>().DistinctBy(s => s.Id).OrderBy(s => s.Name).ToList();
 
-                var p = new Panel { Width = flow.Width - 40, Height = 46, Margin = new Padding(0, 0, 0, 8), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window, Cursor = Cursors.Hand };
-                var lbl = new Label { Text = text, Location = new Point(8, 6), AutoSize = false, Width = p.Width - 16, Height = p.Height - 12 };
-                p.Controls.Add(lbl);
-                p.Click += (_, _) => SelectEntry(entry, p);
-                lbl.Click += (_, _) => SelectEntry(entry, p);
-                flow.Controls.Add(p);
-                entryPanels.Add((p, entry));
+            foreach (var site in sites)
+            {
+                flow.Controls.Add(new Label
+                {
+                    Text = site.Name,
+                    Font = new Font(Font, FontStyle.Bold | FontStyle.Underline),
+                    ForeColor = Color.FromArgb(0x1B, 0x5E, 0x20),
+                    AutoSize = true,
+                    Margin = new Padding(0, 12, 0, 4)
+                });
+
+                var siteEntries = BuildDayEntries(das.Where(a => a.ConstructionSiteId == site.Id).ToList());
+
+                foreach (var entry in siteEntries)
+                {
+                    var line = new Panel { Width = flow.Width - 44, Margin = new Padding(8, 0, 0, 2), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
+                    var rowFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = false, Padding = new Padding(4) };
+
+                    var desc = entry.Label;
+                    if (entry.MultiDay)
+                        desc += $"  ({entry.From:dd.MM.}–{entry.To:dd.MM.})";
+
+                    var lbl = new Label { Text = desc, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 3, 0, 0) };
+                    var btnX = new Button { Text = "X", Width = 26, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand, Margin = new Padding(0) };
+                    StyleButton(btnX);
+                    btnX.FlatAppearance.BorderSize = 0;
+                    btnX.Click += (_, _) => { DeleteEntry(entry, day, f); };
+
+                    rowFlow.Controls.Add(lbl);
+                    rowFlow.Controls.Add(btnX);
+                    line.Height = 32;
+                    line.Controls.Add(rowFlow);
+                    flow.Controls.Add(line);
+                }
             }
         }
-
-        btnDelete.Enabled = entries.Count > 0;
-        btnDelete.Click += (_, _) =>
-        {
-            if (selected == null) { MessageBox.Show("Bitte zuerst einen Eintrag auswählen.", "Löschen", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
-            DeleteEntry(selected, day, f);
-        };
 
         split.Panel1.Controls.Add(flow);
         split.Panel2.Controls.Add(bottom);
@@ -870,11 +871,14 @@ public class MainForm : Form
                             var emp = a0.Employee ?? (a0.EmployeeId.HasValue ? _employees.FirstOrDefault(e => e.Id == a0.EmployeeId.Value) : null);
 
                             var parts = new List<string>();
-                            if (site != null) parts.Add(site.Name);
                             if (team != null) parts.Add(team.Name);
                             if (vehicle != null) parts.Add(vehicle.VehicleNumber);
                             if (emp != null) parts.Add(emp.FullName);
-                            var label = parts.Count > 0 ? string.Join(" / ", parts) : "Eintrag";
+                            // Team members for context
+                            if (team != null)
+                                foreach (var m in team.Members.OrderBy(m => m.FullName))
+                                    parts.Add("  • " + m.FullName);
+                            var label = parts.Count > 0 ? string.Join("\n", parts) : (site?.Name ?? "Eintrag");
 
                             return new AssignmentEntry
                             {
@@ -899,16 +903,16 @@ public class MainForm : Form
         {
             using var dlg = new Form();
             dlg.Text = "Löschen – Mehrfachzuweisung";
-            dlg.Size = new Size(420, 230);
+            dlg.Size = new Size(440, 240);
             dlg.StartPosition = FormStartPosition.CenterParent;
             dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
             dlg.MaximizeBox = dlg.MinimizeBox = false;
             dlg.Font = Font;
-            dlg.Controls.Add(new Label { Text = $"{entry.Label}\n{entry.From:dd.MM.yyyy} – {entry.To:dd.MM.yyyy}", Location = new Point(16, 16), AutoSize = true });
+            dlg.Controls.Add(new Label { Text = $"{entry.Label.Replace("\n", "  ")}\n{entry.From:dd.MM.yyyy} – {entry.To:dd.MM.yyyy}", Location = new Point(16, 16), AutoSize = true });
             dlg.Controls.Add(new Label { Text = "Wie soll gelöscht werden?", Location = new Point(16, 56), AutoSize = true });
-            var btnWhole = new Button { Text = "Ganzer Termin", Location = new Point(16, 110), Width = 170, Height = 38, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
+            var btnWhole = new Button { Text = "Ganzer Termin", Location = new Point(16, 110), Width = 185, Height = 38, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
             StyleButton(btnWhole);
-            var btnDay = new Button { Text = "Nur an diesem Tag", Location = new Point(206, 110), Width = 180, Height = 38 };
+            var btnDay = new Button { Text = "Nur an diesem Tag", Location = new Point(211, 110), Width = 185, Height = 38 };
             StyleButton(btnDay);
             var result = 0;
             btnWhole.Click += (_, _) => { result = 1; dlg.Close(); };
@@ -930,7 +934,7 @@ public class MainForm : Form
         }
         else
         {
-            if (MessageBox.Show($"Eintrag löschen?\n{entry.Label}\n{entry.From:dd.MM.yyyy}", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            if (MessageBox.Show($"Eintrag löschen?\n{entry.Label.Replace("\n", "  ")}\n{entry.From:dd.MM.yyyy}", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
             foreach (var a in entry.Assignments)
                 _db.DeleteAssignment(a.Id);

@@ -131,10 +131,19 @@ public class InformEmployeesForm : UserControl
             (teams.Count == 0 || (a.TeamId.HasValue && teams.Contains(a.TeamId.Value))))
             .ToList();
 
-        var empIds = filtered
-            .SelectMany(a => a.Team != null ? a.Team.Members.Select(m => m.Id) : (a.Employee != null ? new[] { a.Employee.Id } : Array.Empty<int>()))
-            .Where(id => _db.GetAllEmployees().Any(e => e.Id == id))
-            .ToHashSet();
+        // Teams with members (assignments only carry Team.Id/Name, not members)
+        var teamMembers = _db.GetAllTeams().ToDictionary(t => t.Id, t => t.Members);
+        var employees = _db.GetAllEmployees();
+
+        // Build the set of employees that need to be informed.
+        var empIds = new HashSet<int>();
+        foreach (var a in filtered)
+        {
+            if (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var members))
+                foreach (var m in members) empIds.Add(m.Id);
+            else if (a.EmployeeId.HasValue)
+                empIds.Add(a.EmployeeId.Value);
+        }
 
         // Explicitly selected employees
         var allEmpsChecked = _clbEmployees.CheckedItems.Count == _clbEmployees.Items.Count;
@@ -150,9 +159,14 @@ public class InformEmployeesForm : UserControl
         int done = 0, failed = 0;
         foreach (var id in empIds)
         {
-            var emp = _db.GetAllEmployees().First(e => e.Id == id);
+            var emp = employees.FirstOrDefault(e => e.Id == id);
+            if (emp == null) continue;
+
+            // One PDF/e-mail per employee, combining every assignment that concerns them
+            // (site, team membership or explicit selection) - no duplicates.
             var empAss = filtered
-                .Where(a => (a.Team != null && a.Team.Members.Any(m => m.Id == id)) || (a.Employee != null && a.Employee.Id == id))
+                .Where(a => (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var mem) && mem.Any(m => m.Id == id))
+                         || (a.EmployeeId.HasValue && a.EmployeeId.Value == id))
                 .ToList();
             if (empAss.Count == 0) continue;
             try
@@ -162,11 +176,11 @@ public class InformEmployeesForm : UserControl
                 if (email)
                 {
                     if (string.IsNullOrWhiteSpace(emp.Email))
-                        Log($"{emp.FullName}: keine E-Mail-Adresse.");
+                        Log($"{emp.FullName}: keine E-Mail-Adresse hinterlegt.");
                     else if (_notify.SendEmail(pdf, emp, settings))
                         Log($"{emp.FullName}: E-Mail gesendet.");
                     else
-                        Log($"{emp.FullName}: E-Mail fehlgeschlagen.");
+                        Log($"{emp.FullName}: E-Mail fehlgeschlagen (SMTP-Einstellungen prüfen).");
                 }
                 if (!email) Log($"{emp.FullName}: PDF erstellt{(print ? " + gedruckt" : "")}.");
                 done++;
