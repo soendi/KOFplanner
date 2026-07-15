@@ -33,19 +33,23 @@ jobs:
           $v = (Get-Content version.json | ConvertFrom-Json).version
           echo "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: "Create tag"
+      - name: "Create or update tag"
+        shell: pwsh
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git tag "v${{ env.VERSION }}"
-          git push origin "v${{ env.VERSION }}"
+          $tag = "v${{ env.VERSION }}"
+          git tag -f $tag HEAD
+          git push origin $tag --force
 
-      - name: "Create Release"
+      - name: "Create or update Release"
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ env.VERSION }}" `
+          $tag = "v${{ env.VERSION }}"
+          gh release delete $tag --yes 2>$null
+          gh release create $tag `
             "KOFplanner-Setup.exe" `
-            --title "v${{ env.VERSION }}" `
+            --title $tag `
             --notes "Siehe Commits für Details."
