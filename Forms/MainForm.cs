@@ -856,7 +856,7 @@ public class MainForm : Form
                     Margin = new Padding(0, 12, 0, 4)
                 });
 
-                var siteEntries = BuildDayEntries(das.Where(a => a.ConstructionSiteId == site.Id).ToList());
+                var siteEntries = BuildDayEntries(_monthAssignments, day, site.Id);
 
                 foreach (var entry in siteEntries)
                 {
@@ -971,14 +971,24 @@ public class MainForm : Form
         public bool MultiDay => From != To;
     }
 
-    private List<AssignmentEntry> BuildDayEntries(List<Assignment> day)
+    private List<AssignmentEntry> BuildDayEntries(List<Assignment> allAssignments, DateTime day, int? siteId = null)
     {
-        var groups = day.GroupBy(a => (a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId))
+        var groups = allAssignments
+                        .Where(a => siteId == null || a.ConstructionSiteId == siteId)
+                        .Where(a => a.Date.Date == day.Date)
+                        .GroupBy(a => (a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId))
                         .Select(g =>
                         {
-                            var all = g.ToList();
+                            var key = g.Key;
+                            // Resolve the full span of this assignment key across the whole visible range
+                            // (so multi-day entries are detected even when opening a single day).
+                            var all = allAssignments
+                                .Where(a => a.ConstructionSiteId == key.ConstructionSiteId
+                                         && a.TeamId == key.TeamId
+                                         && a.VehicleId == key.VehicleId
+                                         && a.EmployeeId == key.EmployeeId)
+                                .ToList();
                             var dates = all.Select(a => a.Date.Date).Distinct().OrderBy(d => d).ToList();
-                            // Expanding contiguous runs yields overall min/max as the entry span
                             var min = dates.Min();
                             var max = dates.Max();
                             var a0 = all.First();
