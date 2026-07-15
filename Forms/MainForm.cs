@@ -41,6 +41,19 @@ public class MainForm : Form
     private bool _isDragging;
     private Point _dragStartPoint;
 
+    private static void StyleButton(Button btn)
+    {
+        btn.FlatStyle = FlatStyle.Flat;
+        btn.FlatAppearance.BorderSize = 1;
+        btn.FlatAppearance.BorderColor = Color.FromArgb(0x1B, 0x5E, 0x20);
+        btn.BackColor = Color.FromArgb(0x2E, 0x7D, 0x32);
+        btn.ForeColor = Color.White;
+        btn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+        btn.Cursor = Cursors.Hand;
+        btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(0x1B, 0x5E, 0x20);
+        btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(0x00, 0x5C, 0x00);
+    }
+
     public MainForm(DatabaseService db, BackupService backup, UpdateService update)
     {
         _db = db;
@@ -59,14 +72,14 @@ public class MainForm : Form
         dateiMenu.DropDownItems.Add("Beenden", null, (_, _) => Close());
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
         hilfeMenu!.DropDownItems.Add("Nach Updates suchen...", null, async (_, _) => await CheckUpdate());
-        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.1.1.0\nAuthor: Lukas Sonderegger", "Info"));
+        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.1.2.0\nAuthor: Lukas Sonderegger", "Info"));
         MainMenuStrip = menu;
         Controls.Add(menu);
 
         // Main TabControl
-        _tabControl = new TabControl { Dock = DockStyle.Fill };
-        _tabControl.Padding = new Point(18, 8);
-        _tabControl.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+        _tabControl = new TabControl { Dock = DockStyle.Fill, ItemSize = new Size(240, 52) };
+        _tabControl.Padding = new Point(28, 14);
+        _tabControl.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
         _tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
         _tabControl.DrawItem += (s, e) =>
         {
@@ -92,10 +105,13 @@ public class MainForm : Form
         var nav = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = SystemColors.Control };
         var btnPrev = new Button { Text = "<", Width = 40, Height = 28, Location = new Point(15, 6) };
         btnPrev.Click += (_, _) => { _currentMonth = _currentMonth.AddMonths(-1); _dragStartDate = _dragEndDate = null; RefreshCalendar(); };
+        StyleButton(btnPrev);
         var btnNext = new Button { Text = ">", Width = 40, Height = 28, Location = new Point(60, 6) };
         btnNext.Click += (_, _) => { _currentMonth = _currentMonth.AddMonths(1); _dragStartDate = _dragEndDate = null; RefreshCalendar(); };
+        StyleButton(btnNext);
         var btnToday = new Button { Text = "Heute", Width = 60, Height = 28, Location = new Point(105, 6) };
         btnToday.Click += (_, _) => { _currentMonth = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1); _dragStartDate = _dragEndDate = null; RefreshCalendar(); };
+        StyleButton(btnToday);
         _lblMonthYear = new Label { Text = "", Location = new Point(180, 8), AutoSize = true, Font = new Font(Font.FontFamily, 12, FontStyle.Bold) };
         nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, _lblMonthYear });
         tabKalender.Controls.Add(_calendarPanel);
@@ -111,9 +127,9 @@ public class MainForm : Form
         empPanel.Controls.Add(new Label { Text = "Mitarbeiter", Dock = DockStyle.Top, Font = new Font(Font.FontFamily, 10, FontStyle.Bold) });
         _lbEmployees = new ListBox { Dock = DockStyle.Fill, DisplayMember = "FullName" };
         var empBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
-        var btnEmpNew = new Button { Text = "Neu", Width = 70 }; btnEmpNew.Click += (_, _) => EditEmployee(null);
-        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 80 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); };
-        var btnEmpDel = new Button { Text = "Löschen", Width = 70 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); };
+        var btnEmpNew = new Button { Text = "Neu", Width = 75 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
+        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 90 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
+        var btnEmpDel = new Button { Text = "Löschen", Width = 80 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
         empBtns.Controls.AddRange(new Control[] { btnEmpNew, btnEmpEdit, btnEmpDel });
         empPanel.Controls.Add(_lbEmployees);
         empPanel.Controls.Add(empBtns);
@@ -126,9 +142,9 @@ public class MainForm : Form
         _lblTeamMembers = new Label { Text = "", Dock = DockStyle.Bottom, Height = 50, AutoEllipsis = true, Padding = new Padding(3) };
         _lbTeams.SelectedIndexChanged += (_, _) => UpdateTeamDetails();
         var teamBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
-        var btnTeamNew = new Button { Text = "Neu", Width = 70 }; btnTeamNew.Click += (_, _) => EditTeam(null);
-        var btnTeamEdit = new Button { Text = "Bearbeiten", Width = 80 }; btnTeamEdit.Click += (_, _) => { if (_lbTeams.SelectedItem is Team t) EditTeam(t); };
-        var btnTeamDel = new Button { Text = "Löschen", Width = 70 }; btnTeamDel.Click += (_, _) => { if (_lbTeams.SelectedItem is Team t) DeleteTeam(t); };
+        var btnTeamNew = new Button { Text = "Neu", Width = 75 }; btnTeamNew.Click += (_, _) => EditTeam(null); StyleButton(btnTeamNew);
+        var btnTeamEdit = new Button { Text = "Bearbeiten", Width = 90 }; btnTeamEdit.Click += (_, _) => { if (_lbTeams.SelectedItem is Team t) EditTeam(t); }; StyleButton(btnTeamEdit);
+        var btnTeamDel = new Button { Text = "Löschen", Width = 80 }; btnTeamDel.Click += (_, _) => { if (_lbTeams.SelectedItem is Team t) DeleteTeam(t); }; StyleButton(btnTeamDel);
         teamBtns.Controls.AddRange(new Control[] { btnTeamNew, btnTeamEdit, btnTeamDel });
 
         // Vehicle assignment to team
@@ -137,8 +153,8 @@ public class MainForm : Form
         vehFlow.Controls.Add(new Label { Text = "Fahrzeug:", AutoSize = true, Anchor = AnchorStyles.Left });
         _cmbTeamVehicle = new ComboBox { Width = 200, DisplayMember = "ToString" };
         vehFlow.Controls.Add(_cmbTeamVehicle);
-        var btnAssignVeh = new Button { Text = "Zuweisen", Width = 80 };
-        btnAssignVeh.Click += (_, _) => AssignVehicleToTeam();
+        var btnAssignVeh = new Button { Text = "Zuweisen", Width = 85 };
+        btnAssignVeh.Click += (_, _) => AssignVehicleToTeam(); StyleButton(btnAssignVeh);
         vehFlow.Controls.Add(btnAssignVeh);
         vehAssignPanel.Controls.Add(vehFlow);
 
@@ -154,9 +170,9 @@ public class MainForm : Form
         var tabVeh = new TabPage("Fahrzeuge");
         _lbVehicles = new ListBox { Dock = DockStyle.Fill, DisplayMember = "ToString" };
         var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
-        var btnVehNew = new Button { Text = "Neu", Width = 70 }; btnVehNew.Click += (_, _) => EditVehicle(null);
-        var btnVehEdit = new Button { Text = "Bearbeiten", Width = 80 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); };
-        var btnVehDel = new Button { Text = "Löschen", Width = 70 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); };
+        var btnVehNew = new Button { Text = "Neu", Width = 75 }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
+        var btnVehEdit = new Button { Text = "Bearbeiten", Width = 90 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); }; StyleButton(btnVehEdit);
+        var btnVehDel = new Button { Text = "Löschen", Width = 80 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); }; StyleButton(btnVehDel);
         vehBtns.Controls.AddRange(new Control[] { btnVehNew, btnVehEdit, btnVehDel });
         tabVeh.Controls.Add(_lbVehicles);
         tabVeh.Controls.Add(vehBtns);
@@ -166,9 +182,9 @@ public class MainForm : Form
         var tabSite = new TabPage("Baustellen");
         _lbSites = new ListBox { Dock = DockStyle.Fill, DisplayMember = "DisplayText" };
         var siteBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
-        var btnSiteNew = new Button { Text = "Neu", Width = 70 }; btnSiteNew.Click += (_, _) => EditSite(null);
-        var btnSiteEdit = new Button { Text = "Bearbeiten", Width = 80 }; btnSiteEdit.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) EditSite(s); };
-        var btnSiteDel = new Button { Text = "Löschen", Width = 70 }; btnSiteDel.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) DeleteSite(s); };
+        var btnSiteNew = new Button { Text = "Neu", Width = 75 }; btnSiteNew.Click += (_, _) => EditSite(null); StyleButton(btnSiteNew);
+        var btnSiteEdit = new Button { Text = "Bearbeiten", Width = 90 }; btnSiteEdit.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) EditSite(s); }; StyleButton(btnSiteEdit);
+        var btnSiteDel = new Button { Text = "Löschen", Width = 80 }; btnSiteDel.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) DeleteSite(s); }; StyleButton(btnSiteDel);
         siteBtns.Controls.AddRange(new Control[] { btnSiteNew, btnSiteEdit, btnSiteDel });
         tabSite.Controls.Add(_lbSites);
         tabSite.Controls.Add(siteBtns);
@@ -431,25 +447,25 @@ public class MainForm : Form
         tlp.Controls.Add(new Label { Text = "--- Zuweisungen ---", TextAlign = ContentAlignment.MiddleCenter, Height = 20, ForeColor = SystemColors.GrayText }, 0, 1);
 
         var btnSite = new Button { Text = "Baustelle zuweisen", Height = 36, Dock = DockStyle.Fill };
-        btnSite.Click += (_, _) => { popup.Close(); AssignSiteToRange(from, until); };
+        btnSite.Click += (_, _) => { popup.Close(); AssignSiteToRange(from, until); }; StyleButton(btnSite);
         tlp.Controls.Add(btnSite, 0, 2);
 
         var btnTeamAssign = new Button { Text = "Team zuweisen", Height = 36, Dock = DockStyle.Fill };
-        btnTeamAssign.Click += (_, _) => { popup.Close(); AssignTeamToRange(from, until); };
+        btnTeamAssign.Click += (_, _) => { popup.Close(); AssignTeamToRange(from, until); }; StyleButton(btnTeamAssign);
         tlp.Controls.Add(btnTeamAssign, 0, 3);
 
         var btnEmpAssign = new Button { Text = "Mitarbeiter zuweisen", Height = 36, Dock = DockStyle.Fill };
-        btnEmpAssign.Click += (_, _) => { popup.Close(); AssignEmployeeToRange(from, until); };
+        btnEmpAssign.Click += (_, _) => { popup.Close(); AssignEmployeeToRange(from, until); }; StyleButton(btnEmpAssign);
         tlp.Controls.Add(btnEmpAssign, 0, 4);
 
         tlp.Controls.Add(new Label { Text = "--- Abwesenheiten ---", TextAlign = ContentAlignment.MiddleCenter, Height = 20, ForeColor = SystemColors.GrayText }, 0, 5);
 
         var btnVac = new Button { Text = "Urlaub eintragen", Height = 36, Dock = DockStyle.Fill };
-        btnVac.Click += (_, _) => { popup.Close(); AddVacation(from, until); };
+        btnVac.Click += (_, _) => { popup.Close(); AddVacation(from, until); }; StyleButton(btnVac);
         tlp.Controls.Add(btnVac, 0, 6);
 
         var btnSick = new Button { Text = "Krankheit eintragen", Height = 36, Dock = DockStyle.Fill };
-        btnSick.Click += (_, _) => { popup.Close(); AddSickness(from, until); };
+        btnSick.Click += (_, _) => { popup.Close(); AddSickness(from, until); }; StyleButton(btnSick);
         tlp.Controls.Add(btnSick, 0, 7);
 
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
@@ -513,6 +529,7 @@ public class MainForm : Form
         f.StartPosition = FormStartPosition.CenterParent;
         var lb = new ListBox { Dock = DockStyle.Fill, DataSource = compat, DisplayMember = "ToString" };
         var btn = new Button { Text = "OK", Dock = DockStyle.Bottom };
+        StyleButton(btn);
         Vehicle? sel = null;
         btn.Click += (_, _) => { sel = lb.SelectedItem as Vehicle; f.Close(); };
         f.Controls.Add(lb); f.Controls.Add(btn);
@@ -591,6 +608,7 @@ public class MainForm : Form
         f.StartPosition = FormStartPosition.CenterParent;
         var lb = new ListBox { Dock = DockStyle.Fill, DataSource = _sites, DisplayMember = "DisplayText" };
         var btn = new Button { Text = "OK", Dock = DockStyle.Bottom };
+        StyleButton(btn);
         ConstructionSite? r = null;
         btn.Click += (_, _) => { r = lb.SelectedItem as ConstructionSite; f.Close(); };
         f.Controls.Add(lb); f.Controls.Add(btn);
@@ -605,6 +623,7 @@ public class MainForm : Form
         f.StartPosition = FormStartPosition.CenterParent;
         var lb = new ListBox { Dock = DockStyle.Fill, DataSource = _teams, DisplayMember = "Name" };
         var btn = new Button { Text = "OK", Dock = DockStyle.Bottom };
+        StyleButton(btn);
         Team? r = null;
         btn.Click += (_, _) => { r = lb.SelectedItem as Team; f.Close(); };
         f.Controls.Add(lb); f.Controls.Add(btn);
@@ -619,6 +638,7 @@ public class MainForm : Form
         f.StartPosition = FormStartPosition.CenterParent;
         var lb = new ListBox { Dock = DockStyle.Fill, DataSource = _employees, DisplayMember = "FullName" };
         var btn = new Button { Text = "OK", Dock = DockStyle.Bottom };
+        StyleButton(btn);
         Employee? r = null;
         btn.Click += (_, _) => { r = lb.SelectedItem as Employee; f.Close(); };
         f.Controls.Add(lb); f.Controls.Add(btn);
@@ -736,7 +756,7 @@ public class MainForm : Form
         tlp.Controls.Add(new Label { Text = "Folder ID:", Anchor = AnchorStyles.Left }, 0, 2);
         var tf = new TextBox { Dock = DockStyle.Fill }; tlp.Controls.Add(tf, 1, 2);
         var btn = new Button { Text = "Speichern", Dock = DockStyle.Bottom, Height = 30 };
-        btn.Click += (_, _) => { _backup.ConfigureDriveBackup(tid.Text, ts.Text, tf.Text); MessageBox.Show("Gespeichert!"); f.Close(); };
+        btn.Click += (_, _) => { _backup.ConfigureDriveBackup(tid.Text, ts.Text, tf.Text); MessageBox.Show("Gespeichert!"); f.Close(); }; StyleButton(btn);
         tlp.Controls.Add(btn, 0, 3); tlp.SetColumnSpan(btn, 2);
         f.Controls.Add(tlp); f.ShowDialog();
     }

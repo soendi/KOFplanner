@@ -71,9 +71,9 @@ public class TeamForm : Form
 
         // Bottom buttons
         var bottomPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.LeftToRight, Height = 40 };
-        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80 };
+        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, Cursor = Cursors.Hand };
         btnOk.Click += (_, _) => Save();
-        var btnCancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 80 };
+        var btnCancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 80, FlatStyle = FlatStyle.Flat };
         bottomPanel.Controls.AddRange(new Control[] { btnOk, btnCancel });
         Controls.Add(tlp);
         Controls.Add(bottomPanel);
