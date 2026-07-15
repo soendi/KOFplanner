@@ -10,7 +10,7 @@ public class InformEmployeesForm : UserControl
     private readonly NotificationService _notify;
     private readonly ComboBox _cmbRange;
     private readonly DateTimePicker _dtpFrom, _dtpUntil;
-    private readonly CheckedListBox _clbSites, _clbTeams;
+    private readonly CheckedListBox _clbSites, _clbTeams, _clbEmployees;
     private readonly TextBox _txtLog;
 
     public InformEmployeesForm(DatabaseService db, SettingsService settings)
@@ -21,20 +21,21 @@ public class InformEmployeesForm : UserControl
 
         Font = new Font("Segoe UI", 9.5f);
 
-        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, Padding = new Padding(12) };
+        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 7, Padding = new Padding(12) };
         tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
         tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         // Range
         tlp.Controls.Add(new Label { Text = "Zeitraum:", Anchor = AnchorStyles.Left }, 0, 0);
         _cmbRange = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-        _cmbRange.Items.AddRange(new object[] { "Woche", "Monat", "Spannweite" });
+        _cmbRange.Items.AddRange(new object[] { "Aktuelle Woche", "Nächste Woche", "Aktueller Monat", "Nächster Monat", "Spannweite" });
         _cmbRange.SelectedIndex = 0;
         _cmbRange.SelectedIndexChanged += (_, _) => UpdateRangeDates();
         tlp.Controls.Add(_cmbRange, 1, 0);
@@ -49,17 +50,24 @@ public class InformEmployeesForm : UserControl
 
         // Sites
         tlp.Controls.Add(new Label { Text = "Baustellen:", Anchor = AnchorStyles.Top }, 0, 2);
-        _clbSites = new CheckedListBox { Dock = DockStyle.Fill };
+        _clbSites = new CheckedListBox { Dock = DockStyle.Fill, DisplayMember = "Name" };
         foreach (var s in _db.GetAllSites().OrderBy(x => x.Name))
             _clbSites.Items.Add(s, true);
         tlp.Controls.Add(_clbSites, 1, 2);
 
         // Teams
         tlp.Controls.Add(new Label { Text = "Teams:", Anchor = AnchorStyles.Top }, 0, 3);
-        _clbTeams = new CheckedListBox { Dock = DockStyle.Fill };
+        _clbTeams = new CheckedListBox { Dock = DockStyle.Fill, DisplayMember = "Name" };
         foreach (var t in _db.GetAllTeams().OrderBy(x => x.Name))
             _clbTeams.Items.Add(t, true);
         tlp.Controls.Add(_clbTeams, 1, 3);
+
+        // Employees
+        tlp.Controls.Add(new Label { Text = "Mitarbeiter:", Anchor = AnchorStyles.Top }, 0, 4);
+        _clbEmployees = new CheckedListBox { Dock = DockStyle.Fill, DisplayMember = "FullName" };
+        foreach (var e in _db.GetAllEmployees().OrderBy(x => x.LastName))
+            _clbEmployees.Items.Add(e, true);
+        tlp.Controls.Add(_clbEmployees, 1, 4);
 
         // Buttons
         var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
@@ -68,10 +76,10 @@ public class InformEmployeesForm : UserControl
         btnEmail.Click += (_, _) => Run(false, true);
         btnPrint.Click += (_, _) => Run(true, false);
         flp.Controls.AddRange(new Control[] { btnEmail, btnPrint });
-        tlp.Controls.Add(flp, 1, 4);
+        tlp.Controls.Add(flp, 1, 5);
 
         // Log
-        tlp.Controls.Add(new Label { Text = "Protokoll:", Anchor = AnchorStyles.Top }, 0, 5);
+        tlp.Controls.Add(new Label { Text = "Protokoll:", Anchor = AnchorStyles.Top }, 0, 6);
         _txtLog = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, ReadOnly = true };
         tlp.Controls.Add(_txtLog, 1, 5);
 
@@ -84,13 +92,24 @@ public class InformEmployeesForm : UserControl
         var today = DateTime.Today;
         switch (_cmbRange.SelectedItem?.ToString())
         {
-            case "Woche":
+            case "Aktuelle Woche":
                 int diff = (7 + (today.DayOfWeek - DayOfWeek.Monday)) % 7;
                 _dtpFrom.Value = today.AddDays(-diff);
                 _dtpUntil.Value = _dtpFrom.Value.AddDays(6);
                 break;
-            case "Monat":
+            case "Nächste Woche":
+                int diffN = (7 + (today.DayOfWeek - DayOfWeek.Monday)) % 7;
+                var thisMon = today.AddDays(-diffN);
+                _dtpFrom.Value = thisMon.AddDays(7);
+                _dtpUntil.Value = _dtpFrom.Value.AddDays(6);
+                break;
+            case "Aktueller Monat":
                 _dtpFrom.Value = new DateTime(today.Year, today.Month, 1);
+                _dtpUntil.Value = _dtpFrom.Value.AddMonths(1).AddDays(-1);
+                break;
+            case "Nächster Monat":
+                var next = today.AddMonths(1);
+                _dtpFrom.Value = new DateTime(next.Year, next.Month, 1);
                 _dtpUntil.Value = _dtpFrom.Value.AddMonths(1).AddDays(-1);
                 break;
             default:
@@ -101,7 +120,6 @@ public class InformEmployeesForm : UserControl
 
     private void Run(bool print, bool email)
     {
-        if (print && email) { }
         var from = _dtpFrom.Value.Date;
         var until = _dtpUntil.Value.Date;
         var sites = _clbSites.CheckedItems.Cast<ConstructionSite>().Select(s => s.Id).ToHashSet();
@@ -117,6 +135,14 @@ public class InformEmployeesForm : UserControl
             .SelectMany(a => a.Team != null ? a.Team.Members.Select(m => m.Id) : (a.Employee != null ? new[] { a.Employee.Id } : Array.Empty<int>()))
             .Where(id => _db.GetAllEmployees().Any(e => e.Id == id))
             .ToHashSet();
+
+        // Explicitly selected employees
+        var allEmpsChecked = _clbEmployees.CheckedItems.Count == _clbEmployees.Items.Count;
+        var explicitEmps = _clbEmployees.CheckedItems.Cast<Employee>().Select(e => e.Id).ToHashSet();
+        if (allEmpsChecked)
+            empIds.UnionWith(explicitEmps);
+        else
+            empIds = empIds.Intersect(explicitEmps).ToHashSet();
 
         if (empIds.Count == 0) { Log("Keine zugewiesenen Mitarbeiter im Zeitraum gefunden."); return; }
 
