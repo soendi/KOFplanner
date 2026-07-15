@@ -3,7 +3,7 @@ using KOFplanner.Services;
 
 namespace KOFplanner.Forms;
 
-public class InformEmployeesForm : Form
+public class InformEmployeesForm : UserControl
 {
     private readonly DatabaseService _db;
     private readonly SettingsService _settings;
@@ -19,9 +19,6 @@ public class InformEmployeesForm : Form
         _settings = settings;
         _notify = new NotificationService(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KOFplanner"), settings);
 
-        Text = "Mitarbeiter informieren";
-        StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(720, 560);
         Font = new Font("Segoe UI", 9.5f);
 
         var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, Padding = new Padding(12) };

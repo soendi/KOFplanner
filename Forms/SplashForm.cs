@@ -26,7 +26,7 @@ public class SplashForm : Form
 
         if (img != null)
         {
-            ClientSize = img.Size;
+            ClientSize = new Size(img.Width / 2, img.Height / 2);
             var pb = new PictureBox
             {
                 Image = img,

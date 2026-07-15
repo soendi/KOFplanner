@@ -83,8 +83,8 @@ public class MainForm : Form
         Controls.Add(menu);
 
         // Main TabControl. Reserve exactly the tab-strip height so nothing is clipped.
-        _tabControl = new TabControl { Dock = DockStyle.Fill, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(210, 36) };
-        _tabControl.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+        _tabControl = new TabControl { Dock = DockStyle.Fill, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(260, 42), Padding = new Point(0, 0) };
+        _tabControl.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
         _tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
         _tabControl.DrawItem += (s, e) =>
         {
@@ -151,14 +151,8 @@ public class MainForm : Form
 
         // ---- Spalte 2: Teams ----
         var colTeam = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 0, 4, 0) };
-        var teamHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
-        teamHeader.Controls.Add(new Label { Text = "Teams", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
-        var teamBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
-        var btnTeamNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnTeamNew.Click += (_, _) => EditTeam(null); StyleButton(btnTeamNew);
-        var btnTeamEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnTeamEdit.Click += (_, _) => { if (_selectedTeam != null) EditTeam(_selectedTeam); }; StyleButton(btnTeamEdit);
-        var btnTeamDel = new Button { Text = "Loschen", Width = 85, Height = 28 }; btnTeamDel.Click += (_, _) => { if (_selectedTeam != null) DeleteTeam(_selectedTeam); }; StyleButton(btnTeamDel);
-        teamBtns.Controls.AddRange(new Control[] { btnTeamEdit, btnTeamDel, btnTeamNew });
-        teamHeader.Controls.Add(teamBtns);
+        var teamHeader = new Panel { Dock = DockStyle.Top, Height = 30 };
+        teamHeader.Controls.Add(new Label { Text = "Teams", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 4, 0, 0) });
         colTeam.Controls.Add(teamHeader);
         _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(2, 8, 2, 4) };
         _flowTeamCards.Resize += (_, _) => LayoutTeamCards();
@@ -192,16 +186,15 @@ public class MainForm : Form
         var colVeh = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 0, 0, 0) };
         var vehHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
         vehHeader.Controls.Add(new Label { Text = "Fahrzeuge", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
-        var btnVehNew = new Button { Text = "NEU", Width = 90, Height = 28, Dock = DockStyle.Right }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
-        vehHeader.Controls.Add(btnVehNew);
-        var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 32, Padding = new Padding(2) };
+        var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
+        var btnVehNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
         var btnVehEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); }; StyleButton(btnVehEdit);
         var btnVehDel = new Button { Text = "Löschen", Width = 85, Height = 28 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); }; StyleButton(btnVehDel);
-        vehBtns.Controls.AddRange(new Control[] { btnVehEdit, btnVehDel });
+        vehBtns.Controls.AddRange(new Control[] { btnVehEdit, btnVehDel, btnVehNew });
+        vehHeader.Controls.Add(vehBtns);
         _lbVehicles = new ListBox { Dock = DockStyle.Fill, DisplayMember = "ToString" };
         _lbVehicles.MouseDown += VehicleList_MouseDown;
         colVeh.Controls.Add(_lbVehicles);
-        colVeh.Controls.Add(vehBtns);
         colVeh.Controls.Add(vehHeader);
         t2Grid.Controls.Add(colVeh, 2, 0);
 
@@ -222,10 +215,7 @@ public class MainForm : Form
 
         // ========== TAB 5: MITARBEITER INFORMIEREN ==========
         var tabInform = new TabPage("Mitarbeiter informieren");
-        var btnOpenInform = new Button { Text = "Mitarbeiter informieren...", Dock = DockStyle.Fill, Font = new Font("Segoe UI", 14, FontStyle.Bold) };
-        StyleButton(btnOpenInform);
-        btnOpenInform.Click += (_, _) => OpenInform();
-        tabInform.Controls.Add(btnOpenInform);
+        tabInform.Controls.Add(new InformEmployeesForm(_db, _settings) { Dock = DockStyle.Fill });
         _tabControl.TabPages.Add(tabInform);
 
         // Initial load
@@ -249,12 +239,6 @@ public class MainForm : Form
     private void OpenSettings()
     {
         using var f = new SettingsForm(_settings);
-        f.ShowDialog(this);
-    }
-
-    private void OpenInform()
-    {
-        using var f = new InformEmployeesForm(_db, _settings);
         f.ShowDialog(this);
     }
 
@@ -301,8 +285,8 @@ public class MainForm : Form
             var delBtn = card.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "X");
             if (editBtn != null) { editBtn.Left = card.Width - 98; editBtn.Top = 6; }
             if (delBtn != null) { delBtn.Left = card.Width - 48; delBtn.Top = 6; }
-            card.BackColor = (card.Tag is Team t && _selectedTeam != null && t.Id == _selectedTeam.Id)
-                ? Color.FromArgb(0xD8, 0xF0, 0xDC) : Color.White;
+            if (card.Tag is Team t)
+                card.BackColor = t.Color;
         }
     }
 
@@ -331,7 +315,8 @@ public class MainForm : Form
         using var nameFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
         using var licFont = new Font("Segoe UI", 8f);
         using var nameBrush = new SolidBrush(e.ForeColor);
-        using var licBrush = new SolidBrush(Color.FromArgb(0x66, 0x66, 0x66));
+        using var licBrush = new SolidBrush((e.State & DrawItemState.Selected) == DrawItemState.Selected
+            ? Color.White : Color.FromArgb(0x66, 0x66, 0x66));
         e.Graphics.DrawString(name, nameFont, nameBrush, e.Bounds.Left + 5, e.Bounds.Top + 4);
         e.Graphics.DrawString(lic, licFont, licBrush, e.Bounds.Left + 5, e.Bounds.Top + 22);
         e.DrawFocusRectangle();
@@ -1021,6 +1006,16 @@ public class MainForm : Form
             }
             else if (e.Button == MouseButtons.Right)
                 ShowTeamContextMenu(team, card.PointToScreen(e.Location));
+        };
+
+        card.Paint += (s, pe) =>
+        {
+            if (_selectedTeam != null && _selectedTeam.Id == team.Id)
+            {
+                var sel = GetContrastText(team.Color);
+                using var p = new Pen(sel, 3);
+                pe.Graphics.DrawRectangle(p, 1, 1, card.Width - 3, card.Height - 3);
+            }
         };
 
         return card;
