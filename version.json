@@ -1,4 +1,4 @@
 {
-  "version": "1.1.8.0",
-  "notes": "Kalender: pro Tag eigene Linien für Baustelle/Team/Fahrzeug; Team-Farbe wenn Team eingeteilt, sonst weiß mit schwarzer Umrandung; Site pro Tag nicht doppelt zuweisbar"
+  "version": "1.1.9.0",
+  "notes": "Splash-Screen beim Start (Resources/splashscreen.png als EmbeddedResource, 2,5s)"
 }
