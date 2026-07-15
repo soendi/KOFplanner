@@ -5,7 +5,7 @@ namespace KOFplanner.Services;
 
 public class UpdateService
 {
-    private const string VersionUrl = "https://raw.githubusercontent.com/soendi/KOFplanner/main/version.json";
+    private const string VersionUrl = "https://raw.githubusercontent.com/soendi/KOFplanner/master/version.json";
     private readonly string _appPath;
 
     public Version CurrentVersion => typeof(UpdateService).Assembly.GetName().Version ?? new Version(1, 0, 0, 0);

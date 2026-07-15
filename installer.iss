@@ -3,7 +3,7 @@
 ; Version: 1.0.0.0
 
 #define MyAppName "KOFplanner"
-#define MyAppVersion "1.1.2.0"
+#define MyAppVersion "1.1.3.0"
 #define MyAppPublisher "Lukas Sonderegger"
 #define MyAppURL "https://github.com/soendi/KOFplanner"
 #define MyAppExeName "KOFplanner.exe"
