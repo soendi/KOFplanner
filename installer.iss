@@ -5,7 +5,7 @@
 #define MyAppName "KOFplanner"
 #define MyAppVersion "1.0.0.0"
 #define MyAppPublisher "Lukas Sonderegger"
-#define MyAppURL "https://github.com/LukasSonderegger/KOFplanner"
+#define MyAppURL "https://github.com/soendi/KOFplanner"
 #define MyAppExeName "KOFplanner.exe"
 #define AppDate GetDateTimeString('yyyy-mm-dd')
 
@@ -21,7 +21,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=.
-OutputBaseFilename=KOFplanner-Setup-{#MyAppVersion}
+OutputBaseFilename=KOFplanner-Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

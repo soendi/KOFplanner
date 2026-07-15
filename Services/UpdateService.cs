@@ -5,7 +5,7 @@ namespace KOFplanner.Services;
 
 public class UpdateService
 {
-    private const string VersionUrl = "https://raw.githubusercontent.com/LukasSonderegger/KOFplanner/main/version.json";
+    private const string VersionUrl = "https://raw.githubusercontent.com/soendi/KOFplanner/main/version.json";
     private readonly string _appPath;
 
     public Version CurrentVersion => typeof(UpdateService).Assembly.GetName().Version ?? new Version(1, 0, 0, 0);
@@ -33,7 +33,7 @@ public class UpdateService
     {
         try
         {
-            var url = $"https://github.com/LukasSonderegger/KOFplanner/releases/download/v{newVersion}/KOFplanner-Setup.exe";
+            var url = $"https://github.com/soendi/KOFplanner/releases/download/v{newVersion}/KOFplanner-Setup.exe";
             var tempDir = Path.Combine(Path.GetTempPath(), "KOFplannerUpdate");
             Directory.CreateDirectory(tempDir);
             var installerPath = Path.Combine(tempDir, "KOFplanner-Setup.exe");
