@@ -532,6 +532,19 @@ public class DatabaseService
         return (long)cmd.ExecuteScalar()! > 0;
     }
 
+    public bool IsSiteAssigned(int siteId, DateTime date, int? excludeAssignmentId = null)
+    {
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM Assignments WHERE ConstructionSiteId=@sid AND Date=@d" +
+            (excludeAssignmentId.HasValue ? " AND Id!=@eid" : "");
+        cmd.Parameters.AddWithValue("@sid", siteId);
+        cmd.Parameters.AddWithValue("@d", date.ToString("yyyy-MM-dd"));
+        if (excludeAssignmentId.HasValue)
+            cmd.Parameters.AddWithValue("@eid", excludeAssignmentId.Value);
+        return (long)cmd.ExecuteScalar()! > 0;
+    }
+
     public List<int> GetEmployeeTeamIds(int employeeId)
     {
         var list = new List<int>();

@@ -359,20 +359,9 @@ public class MainForm : Form
                 g.DrawString(dayNum.ToString(), df, db2, x + 3, y + 2);
 
                 var dayAssignments = _monthAssignments.Where(a => a.Date == date).ToList();
-                int ly = y + 16;
-                using var sf = new Font(Font.FontFamily, 7);
-                foreach (var a in dayAssignments)
+                if (dayAssignments.Count > 0)
                 {
-                    if (ly > y + _calendarDayHeight - 4) break;
-                    using var sb = new SolidBrush(GetSiteColor(a.ConstructionSiteId));
-                    g.FillRectangle(sb, x + 2, ly, _calendarDayWidth - 4, 14);
-                    var detail = a.Site?.Name ?? "";
-                    if (a.Team != null) detail += ":" + a.Team.Name;
-                    else if (a.Employee != null) detail += ":" + a.Employee.FullName;
-                    detail = detail.Length > 18 ? detail[..15] + ".." : detail;
-                    using var tb = new SolidBrush(Color.White);
-                    g.DrawString(detail, sf, tb, x + 4, ly + 1);
-                    ly += 15;
+                    DrawDayLines(g, date, dayAssignments, x, y);
                 }
             }
         }
@@ -390,6 +379,49 @@ public class MainForm : Form
                 using var p = new Pen(Color.Blue, 2);
                 g.DrawRectangle(p, selRect);
             }
+        }
+    }
+
+    private void DrawDayLines(Graphics g, DateTime date, List<Assignment> day, int x, int y)
+    {
+        var team = day.FirstOrDefault(a => a.Team != null)?.Team;
+        var connected = team != null;
+        var fill = connected ? team!.Color : Color.White;
+        var border = connected ? team!.Color : Color.Black;
+        var text = connected ? Color.White : Color.Black;
+
+        var lines = new List<(string Label, Color Fill, Color Border, Color Text)>();
+
+        foreach (var site in day.Select(a => a.Site).OfType<ConstructionSite>().DistinctBy(s => s.Id).OrderBy(s => s.Name))
+            lines.Add((site.Name, fill, border, text));
+
+        foreach (var t in day.Select(a => a.Team).OfType<Team>().DistinctBy(t => t.Id).OrderBy(t => t.Name))
+        {
+            var tf = connected ? t.Color : Color.White;
+            var tb = connected ? t.Color : Color.Black;
+            lines.Add((t.Name, tf, tb, text));
+        }
+
+        foreach (var v in day.Select(a => a.Vehicle).OfType<Vehicle>().DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber))
+            lines.Add((v.VehicleNumber, fill, border, text));
+
+        using var sf = new Font(Font.FontFamily, 7);
+        int ly = y + 16;
+        var lineH = 14;
+        var maxY = y + _calendarDayHeight - 4;
+        foreach (var (label, lf, lb, lt) in lines)
+        {
+            if (ly > maxY) break;
+            var lx = x + 2;
+            var lw = _calendarDayWidth - 4;
+            using var fb = new SolidBrush(lf);
+            g.FillRectangle(fb, lx, ly, lw, lineH);
+            using var bp = new Pen(lb, 1);
+            g.DrawRectangle(bp, lx, ly, lw, lineH);
+            var detail = label.Length > 18 ? label[..15] + ".." : label;
+            using var tb = new SolidBrush(lt);
+            g.DrawString(detail, sf, tb, lx + 2, ly + 1);
+            ly += lineH + 1;
         }
     }
 
@@ -611,7 +643,7 @@ public class MainForm : Form
         {
             for (var d = from; d <= until; d = d.AddDays(1))
             {
-                if (!_db.IsTeamAssigned(team.Id, d))
+                if (!_db.IsSiteAssigned(site.Id, d) && !_db.IsTeamAssigned(team.Id, d))
                     _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, TeamId = team.Id, Date = d });
             }
             CheckAutoVehicleAssignment(team, site.Id, from, until);
@@ -669,7 +701,7 @@ public class MainForm : Form
         if (site == null) return;
 
         for (var d = from; d <= until; d = d.AddDays(1))
-            if (!_db.IsTeamAssigned(team.Id, d))
+            if (!_db.IsSiteAssigned(site.Id, d) && !_db.IsTeamAssigned(team.Id, d))
                 _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, TeamId = team.Id, Date = d });
 
         CheckAutoVehicleAssignment(team, site.Id, from, until);
