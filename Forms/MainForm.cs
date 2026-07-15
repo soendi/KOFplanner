@@ -37,6 +37,8 @@ public class MainForm : Form
     // Calendar drag selection
     private DateTime? _dragStartDate, _dragEndDate, _dragCurrentDate;
     private bool _isDragging;
+    private bool _dragIsAssignment;
+    private bool _suppressClick;
     private Point _dragStartPoint;
 
     private static void StyleButton(Button btn)
@@ -100,6 +102,7 @@ public class MainForm : Form
         _calendarPanel.MouseMove += Calendar_MouseMove;
         _calendarPanel.MouseUp += Calendar_MouseUp;
         _calendarPanel.MouseClick += Calendar_MouseClick;
+        _calendarPanel.MouseDoubleClick += Calendar_MouseDoubleClick;
 
         var nav = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = SystemColors.Control };
         var btnPrev = new Button { Text = "<", Width = 40, Height = 28, Location = new Point(15, 6) };
@@ -438,6 +441,8 @@ public class MainForm : Form
             if (d.HasValue)
             {
                 _isDragging = true;
+                _suppressClick = false;
+                _dragIsAssignment = (ModifierKeys & Keys.Control) != 0;
                 _dragStartDate = _dragEndDate = _dragCurrentDate = d;
                 _dragStartPoint = e.Location;
                 _calendarPanel.Invalidate();
@@ -453,6 +458,7 @@ public class MainForm : Form
             if (d.HasValue && d != _dragCurrentDate)
             {
                 _dragCurrentDate = _dragEndDate = d;
+                _suppressClick = true;
                 _calendarPanel.Invalidate();
             }
         }
@@ -470,26 +476,32 @@ public class MainForm : Form
             var d = GetDateFromPoint(e.Location);
             if (d.HasValue)
                 _dragEndDate = d;
-            if (_dragStartDate.HasValue && _dragEndDate.HasValue)
+            if (_dragIsAssignment && _dragStartDate.HasValue && _dragEndDate.HasValue)
+            {
+                _suppressClick = true;
                 ShowDateRangePopup(_calendarPanel.PointToScreen(e.Location));
+            }
         }
     }
 
     private void Calendar_MouseClick(object? sender, MouseEventArgs e)
     {
-        if (e.Button == MouseButtons.Left && !_isDragging)
+        if (e.Button == MouseButtons.Left && !_isDragging && !_suppressClick)
         {
             var d = GetDateFromPoint(e.Location);
             if (d.HasValue)
             {
-                var yOffset = e.Y - _calendarOrigin.Y;
-                var row = yOffset / _calendarDayHeight;
-                var idx = (e.Y - (_calendarOrigin.Y + row * _calendarDayHeight + 16)) / 15;
-                var das = _monthAssignments.Where(a => a.Date == d.Value).ToList();
-                if (idx >= 0 && idx < das.Count)
-                    ShowAssignmentDetail(das[idx]);
+                _dragStartDate = _dragEndDate = d;
+                _calendarPanel.Invalidate();
             }
         }
+    }
+
+    private void Calendar_MouseDoubleClick(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        var d = GetDateFromPoint(e.Location);
+        if (d.HasValue) ShowDayOverview(d.Value);
     }
 
     // ====== DATE RANGE POPUP ======
@@ -543,6 +555,50 @@ public class MainForm : Form
         popup.ShowDialog();
         _dragStartDate = _dragEndDate = null;
         _calendarPanel.Invalidate();
+    }
+
+    // ====== DAY OVERVIEW ======
+    private void ShowDayOverview(DateTime day)
+    {
+        var das = _monthAssignments.Where(a => a.Date == day).ToList();
+        var sites = das.Select(a => a.Site).OfType<ConstructionSite>().DistinctBy(s => s.Id).OrderBy(s => s.Name).ToList();
+        var teams = das.Select(a => a.Team).OfType<Team>().DistinctBy(t => t.Id).ToList();
+        var employees = das.Select(a => a.Employee).OfType<Employee>()
+            .Concat(teams.SelectMany(t => t.Members))
+            .DistinctBy(e => e.Id).OrderBy(e => e.FullName).ToList();
+        var vehicles = das.Select(a => a.Vehicle).OfType<Vehicle>()
+            .Concat(teams.Where(t => t.PreferredVehicleId.HasValue)
+                        .Select(t => _vehicles.FirstOrDefault(v => v.Id == t.PreferredVehicleId!.Value))
+                        .OfType<Vehicle>())
+            .DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber).ToList();
+
+        using var f = new Form();
+        f.Text = $"Übersicht {day:dd.MM.yyyy}";
+        f.Size = new Size(420, 540);
+        f.MinimumSize = new Size(360, 300);
+        f.StartPosition = FormStartPosition.CenterParent;
+        f.Font = Font;
+
+        var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(16) };
+
+        void AddSection(string title, IEnumerable<string> items)
+        {
+            flow.Controls.Add(new Label { Text = title, Font = new Font(Font, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 12, 0, 4) });
+            var list = items.ToList();
+            if (list.Count == 0)
+                flow.Controls.Add(new Label { Text = "– keine", ForeColor = SystemColors.GrayText, AutoSize = true, Margin = new Padding(0, 0, 0, 8) });
+            else
+                foreach (var it in list)
+                    flow.Controls.Add(new Label { Text = "• " + it, AutoSize = true, Margin = new Padding(2, 0, 0, 2) });
+        }
+
+        AddSection($"Baustellen ({sites.Count})", sites.Select(s => s.Name));
+        AddSection($"Teams ({teams.Count})", teams.Select(t => t.Name));
+        AddSection($"Mitarbeiter ({employees.Count})", employees.Select(e => e.FullName));
+        AddSection($"Fahrzeuge ({vehicles.Count})", vehicles.Select(v => v.VehicleNumber));
+
+        f.Controls.Add(flow);
+        f.ShowDialog();
     }
 
     // ====== RANGE ACTIONS ======
