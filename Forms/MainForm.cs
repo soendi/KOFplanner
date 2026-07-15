@@ -59,12 +59,25 @@ public class MainForm : Form
         dateiMenu.DropDownItems.Add("Beenden", null, (_, _) => Close());
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
         hilfeMenu!.DropDownItems.Add("Nach Updates suchen...", null, async (_, _) => await CheckUpdate());
-        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.0.0.0\nAuthor: Lukas Sonderegger", "Info"));
+        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.1.0.0\nAuthor: Lukas Sonderegger", "Info"));
         MainMenuStrip = menu;
         Controls.Add(menu);
 
         // Main TabControl
-        _tabControl = new TabControl { Dock = DockStyle.Fill, Padding = new Point(10, 5) };
+        _tabControl = new TabControl { Dock = DockStyle.Fill };
+        _tabControl.Padding = new Point(18, 8);
+        _tabControl.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+        _tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
+        _tabControl.DrawItem += (s, e) =>
+        {
+            var tab = _tabControl;
+            var bg = e.State.HasFlag(DrawItemState.Selected) ? Color.FromArgb(0x2E, 0x7D, 0x32) : SystemColors.Control;
+            var fg = e.State.HasFlag(DrawItemState.Selected) ? Color.White : Color.FromArgb(0x33, 0x33, 0x33);
+            using var b = new SolidBrush(bg);
+            e.Graphics.FillRectangle(b, e.Bounds);
+            TextRenderer.DrawText(e.Graphics, tab.TabPages[e.Index].Text, tab.Font, e.Bounds, fg, bg,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        };
         Controls.Add(_tabControl);
 
         // ========== TAB 1: KALENDER ==========
@@ -311,6 +324,7 @@ public class MainForm : Form
 
     private DateTime? GetDateFromPoint(Point p)
     {
+        if (_calendarDayWidth <= 0 || _calendarDayHeight <= 0) return null;
         var col = (p.X - _calendarOrigin.X) / _calendarDayWidth;
         var row = (p.Y - _calendarOrigin.Y) / _calendarDayHeight;
         if (col < 0 || col > 6 || row < 0 || row > 5) return null;
