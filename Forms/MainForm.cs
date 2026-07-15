@@ -78,8 +78,7 @@ public class MainForm : Form
         Controls.Add(menu);
 
         // Main TabControl
-        _tabControl = new TabControl { Dock = DockStyle.Fill, ItemSize = new Size(90, 40) };
-        _tabControl.Padding = new Point(0, 0);
+        _tabControl = new TabControl { Dock = DockStyle.Fill, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(210, 36) };
         _tabControl.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
         _tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
         _tabControl.DrawItem += (s, e) =>
