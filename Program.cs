@@ -8,15 +8,26 @@ static class Program
     [STAThread]
     static void Main()
     {
-        Application.SetHighDpiMode(HighDpiMode.SystemAware);
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
+        try
+        {
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
 
-        var dbDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KOFplanner");        Directory.CreateDirectory(dbDir);        var dbPath = Path.Combine(dbDir, "kofplanner.db");
-        var db = new DatabaseService(dbPath);
-        var backup = new BackupService(dbPath);
-        var update = new UpdateService();
+            var dbDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KOFplanner");
+            Directory.CreateDirectory(dbDir);
+            var dbPath = Path.Combine(dbDir, "kofplanner.db");
+            var db = new DatabaseService(dbPath);
+            var backup = new BackupService(dbPath);
+            var update = new UpdateService();
 
-        Application.Run(new MainForm(db, backup, update));
+            Application.Run(new MainForm(db, backup, update));
+        }
+        catch (Exception ex)
+        {
+            var log = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KOFplanner", "crash.log");
+            File.WriteAllText(log, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n{ex}");
+            MessageBox.Show($"Fehler beim Start: {ex.Message}\n\nDetails: {log}", "KOFplanner");
+        }
     }
 }
