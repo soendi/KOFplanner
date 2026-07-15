@@ -6,9 +6,11 @@ namespace KOFplanner.Services;
 public class DatabaseService
 {
     private readonly string _connectionString;
+    public string DbPath { get; }
 
     public DatabaseService(string dbPath)
     {
+        DbPath = dbPath;
         _connectionString = $"Data Source={dbPath}";
         Initialize();
     }

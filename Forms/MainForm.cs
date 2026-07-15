@@ -73,6 +73,7 @@ public class MainForm : Form
         var menu = new MenuStrip { Dock = DockStyle.Top, AutoSize = false, Height = 24, Padding = new Padding(0) };
         var dateiMenu = menu.Items.Add("&Datei") as ToolStripMenuItem;
         dateiMenu!.DropDownItems.Add("Datenbank sichern...", null, async (_, _) => await DoBackup());
+        dateiMenu.DropDownItems.Add("Datenbank wiederherstellen...", null, (_, _) => RestoreDatabase());
         dateiMenu.DropDownItems.Add("Google Drive Backup...", null, (_, _) => ConfigureBackup());
         dateiMenu.DropDownItems.Add(new ToolStripSeparator());
         dateiMenu.DropDownItems.Add("Einstellungen...", null, (_, _) => OpenSettings());
@@ -481,7 +482,7 @@ public class MainForm : Form
 
         foreach (var ta in teamAssignments)
         {
-            var team = ta.Team!;
+            var team = ta.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == ta.TeamId.Value) ?? ta.Team! : ta.Team!;
             var site = ta.Site!;
             connectedSiteIds.Add(site.Id);
             var color = team.Color;
@@ -813,25 +814,70 @@ public class MainForm : Form
 
                 foreach (var entry in siteEntries)
                 {
-                    var line = new Panel { Width = flow.Width - 44, Margin = new Padding(8, 0, 0, 2), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
-                    var rowFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = false, Padding = new Padding(4) };
-
                     var desc = entry.Label;
                     if (entry.MultiDay)
                         desc += $"  ({entry.From:dd.MM.}–{entry.To:dd.MM.})";
-
-                    var lbl = new Label { Text = desc, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 3, 0, 0) };
-                    var btnX = new Button { Text = "X", Width = 26, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand, Margin = new Padding(0) };
-                    StyleButton(btnX);
-                    btnX.FlatAppearance.BorderSize = 0;
-                    btnX.Click += (_, _) => { DeleteEntry(entry, day, f); };
-
-                    rowFlow.Controls.Add(lbl);
-                    rowFlow.Controls.Add(btnX);
-                    line.Height = 32;
-                    line.Controls.Add(rowFlow);
-                    flow.Controls.Add(line);
+                    var captured = entry;
+                    flow.Controls.Add(MakeDeletableLine(flow.Width, desc, () => DeleteEntry(captured, day, f)));
                 }
+            }
+        }
+
+        // Vacation / Sickness for this day (deletable)
+        var dayVac = _vacations.Where(v => day >= v.StartDate.Date && day <= v.EndDate.Date).OrderBy(v => v.Employee?.FullName).ToList();
+        var daySick = _sickness.Where(s => day >= s.StartDate.Date && day <= s.EndDate.Date).OrderBy(s => s.Employee?.FullName).ToList();
+
+        if (dayVac.Count > 0)
+        {
+            flow.Controls.Add(new Label
+            {
+                Text = "Urlaub",
+                Font = new Font(Font, FontStyle.Bold | FontStyle.Underline),
+                ForeColor = Color.FromArgb(0x2E, 0x7D, 0x32),
+                AutoSize = true,
+                Margin = new Padding(0, 12, 0, 4)
+            });
+            foreach (var v in dayVac)
+            {
+                var name = v.Employee?.FullName ?? $"MA {v.EmployeeId}";
+                var suffix = v.StartDate.Date == v.EndDate.Date ? "" : $"  ({v.StartDate:dd.MM.}–{v.EndDate:dd.MM.})";
+                var vid = v.Id;
+                flow.Controls.Add(MakeDeletableLine(flow.Width, $"Urlaub: {name}{suffix}", () =>
+                {
+                    if (MessageBox.Show($"Urlaub löschen?\n{name}{suffix}", "Urlaub löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    {
+                        _db.DeleteVacation(vid);
+                        RefreshAllData();
+                        ShowDayOverview(day);
+                    }
+                }));
+            }
+        }
+
+        if (daySick.Count > 0)
+        {
+            flow.Controls.Add(new Label
+            {
+                Text = "Krankheit",
+                Font = new Font(Font, FontStyle.Bold | FontStyle.Underline),
+                ForeColor = Color.FromArgb(0xC6, 0x28, 0x28),
+                AutoSize = true,
+                Margin = new Padding(0, 12, 0, 4)
+            });
+            foreach (var s in daySick)
+            {
+                var name = s.Employee?.FullName ?? $"MA {s.EmployeeId}";
+                var suffix = s.StartDate.Date == s.EndDate.Date ? "" : $"  ({s.StartDate:dd.MM.}–{s.EndDate:dd.MM.})";
+                var sid = s.Id;
+                flow.Controls.Add(MakeDeletableLine(flow.Width, $"Krank: {name}{suffix}", () =>
+                {
+                    if (MessageBox.Show($"Krankheit löschen?\n{name}{suffix}", "Krankheit löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    {
+                        _db.DeleteSickness(sid);
+                        RefreshAllData();
+                        ShowDayOverview(day);
+                    }
+                }));
             }
         }
 
@@ -839,6 +885,20 @@ public class MainForm : Form
         split.Panel2.Controls.Add(bottom);
         f.Controls.Add(split);
         f.ShowDialog();
+    }
+
+    private Panel MakeDeletableLine(int parentWidth, string text, Action onDelete)
+    {
+        var line = new Panel { Width = parentWidth - 44, Height = 32, Margin = new Padding(8, 0, 0, 2), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
+        var lbl = new Label { Text = text, Location = new Point(6, 4), AutoSize = true, MaximumSize = new Size(line.Width - 40, 0), Padding = new Padding(0, 3, 0, 0) };
+        var btnX = new Button { Text = "X", Width = 26, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand };
+        StyleButton(btnX);
+        btnX.FlatAppearance.BorderSize = 0;
+        btnX.Location = new Point(line.Width - 26 - 2, 4);
+        btnX.Click += (_, _) => onDelete();
+        line.Controls.Add(lbl);
+        line.Controls.Add(btnX);
+        return line;
     }
 
     private sealed class AssignmentEntry
@@ -866,7 +926,7 @@ public class MainForm : Form
                             var max = dates.Max();
                             var a0 = all.First();
                             var site = a0.Site ?? _sites.FirstOrDefault(s => s.Id == a0.ConstructionSiteId);
-                            var team = a0.Team ?? (a0.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == a0.TeamId.Value) : null);
+                            var team = a0.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == a0.TeamId.Value) : null;
                             var vehicle = a0.Vehicle ?? (a0.VehicleId.HasValue ? _vehicles.FirstOrDefault(v => v.Id == a0.VehicleId.Value) : null);
                             var emp = a0.Employee ?? (a0.EmployeeId.HasValue ? _employees.FirstOrDefault(e => e.Id == a0.EmployeeId.Value) : null);
 
@@ -874,7 +934,7 @@ public class MainForm : Form
                             if (team != null) parts.Add(team.Name);
                             if (vehicle != null) parts.Add(vehicle.VehicleNumber);
                             if (emp != null) parts.Add(emp.FullName);
-                            // Team members for context
+                            // Team members for context (resolved from the team list which carries Members)
                             if (team != null)
                                 foreach (var m in team.Members.OrderBy(m => m.FullName))
                                     parts.Add("  • " + m.FullName);
@@ -1360,11 +1420,44 @@ public class MainForm : Form
             MessageBox.Show("Google Drive Backup erfolgreich!", "Backup");
         else
         {
-            var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kofplanner.db");
-            var bp = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"kofplanner_backup_{DateTime.Now:yyyyMMdd_HHmmss}.db");
-            try { File.Copy(dbPath, bp); MessageBox.Show($"Lokales Backup: {bp}", "Backup"); }
+            var dbPath = _db.DbPath;
+            if (!File.Exists(dbPath))
+            {
+                MessageBox.Show($"Datenbank nicht gefunden:\n{dbPath}", "Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            var bp = Path.Combine(Path.GetDirectoryName(dbPath)!, $"kofplanner_backup_{DateTime.Now:yyyyMMdd_HHmmss}.db");
+            try { File.Copy(dbPath, bp); MessageBox.Show($"Lokales Backup erstellt:\n{bp}", "Backup"); }
             catch (Exception ex) { MessageBox.Show($"Fehler: {ex.Message}"); }
         }
+    }
+
+    private void RestoreDatabase()
+    {
+        using var ofd = new OpenFileDialog
+        {
+            Filter = "Datenbank (*.db)|*.db|Alle Dateien (*.*)|*.*",
+            Title = "Datenbank wiederherstellen"
+        };
+        if (ofd.ShowDialog(this) != DialogResult.OK) return;
+
+        var dbPath = _db.DbPath;
+        if (MessageBox.Show($"Die aktuelle Datenbank wird durch\n{Path.GetFileName(ofd.FileName)}\nersetzt. Ein Backup der aktuellen Datei wird zuvor erstellt.\n\nFortfahren?",
+                "Datenbank wiederherstellen", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+
+        try
+        {
+            if (File.Exists(dbPath))
+            {
+                var bak = Path.Combine(Path.GetDirectoryName(dbPath)!, $"kofplanner_backup_vor_restore_{DateTime.Now:yyyyMMdd_HHmmss}.db");
+                File.Copy(dbPath, bak, true);
+            }
+            File.Copy(ofd.FileName, dbPath, true);
+            MessageBox.Show("Datenbank wiederhergestellt. Die Anwendung wird neu geladen.", "Wiederhergestellt", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Application.Restart();
+        }
+        catch (Exception ex) { MessageBox.Show($"Fehler beim Wiederherstellen: {ex.Message}", "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 
     private void ConfigureBackup()

@@ -9,4 +9,6 @@ public class ConstructionSite
     public DateTime? EndDate { get; set; }
 
     public string DisplayText => string.IsNullOrEmpty(Address) ? Name : $"{Name} - {Address}";
+
+    public override string ToString() => DisplayText;
 }
