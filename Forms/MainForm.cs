@@ -48,6 +48,7 @@ public class MainForm : Form
         btn.ForeColor = Color.White;
         btn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
         btn.Cursor = Cursors.Hand;
+        btn.TextAlign = ContentAlignment.MiddleCenter;
         btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(0x1B, 0x5E, 0x20);
         btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(0x00, 0x5C, 0x00);
     }
@@ -75,8 +76,8 @@ public class MainForm : Form
         Controls.Add(menu);
 
         // Main TabControl
-        _tabControl = new TabControl { Dock = DockStyle.Fill, ItemSize = new Size(240, 52) };
-        _tabControl.Padding = new Point(28, 14);
+        _tabControl = new TabControl { Dock = DockStyle.Fill, ItemSize = new Size(90, 40) };
+        _tabControl.Padding = new Point(0, 0);
         _tabControl.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
         _tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
         _tabControl.DrawItem += (s, e) =>
@@ -142,8 +143,7 @@ public class MainForm : Form
         var teamHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
         teamHeader.Controls.Add(new Label { Text = "Teams", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
         colTeam.Controls.Add(teamHeader);
-        var teamScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(2) };
-        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 0, 0, 4) };
+        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(2, 2, 2, 4) };
         _flowTeamCards.Resize += (_, _) => LayoutTeamCards();
         _pnlNewTeamDropZone = new Panel
         {
@@ -168,8 +168,7 @@ public class MainForm : Form
                 CreateTeamFromEmployee(emp);
         };
         _flowTeamCards.Controls.Add(_pnlNewTeamDropZone);
-        teamScroll.Controls.Add(_flowTeamCards);
-        colTeam.Controls.Add(teamScroll);
+        colTeam.Controls.Add(_flowTeamCards);
         t2Grid.Controls.Add(colTeam, 1, 0);
 
         // ---- Spalte 3: Fahrzeuge ----
@@ -179,8 +178,8 @@ public class MainForm : Form
         var btnVehNew = new Button { Text = "NEU", Width = 90, Height = 28, Dock = DockStyle.Right }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
         vehHeader.Controls.Add(btnVehNew);
         var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 32, Padding = new Padding(2) };
-        var btnVehEdit = new Button { Text = "Bearbeiten", Width = 100 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); }; StyleButton(btnVehEdit);
-        var btnVehDel = new Button { Text = "Löschen", Width = 85 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); }; StyleButton(btnVehDel);
+        var btnVehEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); }; StyleButton(btnVehEdit);
+        var btnVehDel = new Button { Text = "Löschen", Width = 85, Height = 28 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); }; StyleButton(btnVehDel);
         vehBtns.Controls.AddRange(new Control[] { btnVehEdit, btnVehDel });
         _lbVehicles = new ListBox { Dock = DockStyle.Fill, DisplayMember = "ToString" };
         _lbVehicles.MouseDown += VehicleList_MouseDown;
@@ -197,8 +196,8 @@ public class MainForm : Form
         _lbSites = new ListBox { Dock = DockStyle.Fill, DisplayMember = "DisplayText" };
         var siteBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
         var btnSiteNew = new Button { Text = "Neu", Width = 75 }; btnSiteNew.Click += (_, _) => EditSite(null); StyleButton(btnSiteNew);
-        var btnSiteEdit = new Button { Text = "Bearbeiten", Width = 100 }; btnSiteEdit.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) EditSite(s); }; StyleButton(btnSiteEdit);
-        var btnSiteDel = new Button { Text = "Löschen", Width = 85 }; btnSiteDel.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) DeleteSite(s); }; StyleButton(btnSiteDel);
+        var btnSiteEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnSiteEdit.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) EditSite(s); }; StyleButton(btnSiteEdit);
+        var btnSiteDel = new Button { Text = "Löschen", Width = 85, Height = 28 }; btnSiteDel.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) DeleteSite(s); }; StyleButton(btnSiteDel);
         siteBtns.Controls.AddRange(new Control[] { btnSiteNew, btnSiteEdit, btnSiteDel });
         tabSite.Controls.Add(_lbSites);
         tabSite.Controls.Add(siteBtns);
@@ -851,12 +850,12 @@ public class MainForm : Form
         var lblVeh = new Label { Text = prefVeh != null ? $"Fahrzeug: {prefVeh.VehicleNumber}" : "kein Fahrzeug", AutoSize = false, Height = 16, Left = 12, Top = 72, Width = card.Width - 24, Font = new Font("Segoe UI", 8, FontStyle.Italic), ForeColor = fg };
         card.Controls.Add(lblVeh);
 
-        var btnEdit = new Button { Text = "Bearb.", Width = 46, Height = 24, Left = card.Width - 98, Top = 8, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.FromArgb(0x1B, 0x5E, 0x20) };
+        var btnEdit = new Button { Text = "Bearb.", Width = 46, Height = 28, Left = card.Width - 98, Top = 6, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.FromArgb(0x1B, 0x5E, 0x20), TextAlign = ContentAlignment.MiddleCenter };
         btnEdit.FlatStyle = FlatStyle.Flat;
         btnEdit.Click += (_, _) => { EditTeam(team); };
         card.Controls.Add(btnEdit);
 
-        var btnDel = new Button { Text = "X", Width = 46, Height = 24, Left = card.Width - 48, Top = 8, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.Red };
+        var btnDel = new Button { Text = "X", Width = 46, Height = 28, Left = card.Width - 48, Top = 6, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.Red, TextAlign = ContentAlignment.MiddleCenter };
         btnDel.FlatStyle = FlatStyle.Flat;
         btnDel.Click += (_, _) => { DeleteTeam(team); };
         card.Controls.Add(btnDel);
@@ -973,11 +972,17 @@ public class MainForm : Form
     }
 
     // ====== UPDATE ======
+    private static bool ConfirmUpdate()
+    {
+        return MessageBox.Show("Neue Version gefunden.\n\nMöchten Sie das Update automatisch installieren lassen?",
+            "Update verfügbar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+    }
+
     private async Task CheckUpdate()
     {
         var v = await _update.CheckForUpdate();
         if (v == null) MessageBox.Show("Kein Update verfügbar.\nVersion ist aktuell.", "Update");
-        else if (await _update.DownloadAndInstall(v)) Application.Exit();
+        else if (ConfirmUpdate() && await _update.DownloadAndInstall(v)) Application.Exit();
     }
 
     private async Task CheckUpdateSilent()
@@ -985,9 +990,7 @@ public class MainForm : Form
         try
         {
             var v = await _update.CheckForUpdate();
-            if (v != null && MessageBox.Show($"Neue Version {v} verfügbar.\nJetzt installieren?", "Update",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
-                if (await _update.DownloadAndInstall(v)) Application.Exit();
+            if (v != null && ConfirmUpdate() && await _update.DownloadAndInstall(v)) Application.Exit();
         }
         catch { }
     }
