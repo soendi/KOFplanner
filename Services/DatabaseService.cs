@@ -606,6 +606,18 @@ public class DatabaseService
         return (long)cmd.ExecuteScalar()! > 0;
     }
 
+    public bool IsVehicleAssigned(int vehicleId, DateTime date, List<int> excludeIds)
+    {
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        var excl = excludeIds != null && excludeIds.Count > 0
+            ? " AND Id NOT IN (" + string.Join(",", excludeIds) + ")" : "";
+        cmd.CommandText = "SELECT COUNT(*) FROM Assignments WHERE VehicleId=@vid AND Date=@d" + excl;
+        cmd.Parameters.AddWithValue("@vid", vehicleId);
+        cmd.Parameters.AddWithValue("@d", date.ToString("yyyy-MM-dd"));
+        return (long)cmd.ExecuteScalar()! > 0;
+    }
+
     public bool IsTeamAssigned(int teamId, DateTime date, int? excludeAssignmentId = null)
     {
         using var conn = GetConnection();

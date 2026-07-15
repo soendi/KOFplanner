@@ -856,15 +856,41 @@ public class MainForm : Form
                     Margin = new Padding(0, 12, 0, 4)
                 });
 
-                var siteEntries = BuildDayEntries(_monthAssignments, day, site.Id);
+                var siteEntries = BuildDayEntries(_monthAssignments, day, site.Id).OrderBy(e => e.TeamId).ToList();
 
                 foreach (var entry in siteEntries)
                 {
-                    var desc = entry.Label;
-                    if (entry.MultiDay)
-                        desc += $"  ({entry.From:dd.MM.}–{entry.To:dd.MM.})";
                     var captured = entry;
-                    flow.Controls.Add(MakeDeletableLine(flow.Width, desc, () => DeleteEntry(captured, day, f)));
+                    var spanTxt = entry.MultiDay ? $"  ({entry.From:dd.MM.}–{entry.To:dd.MM.})" : "";
+
+                    // Team (löschen cascaded Fahrzeug + Baustelle über den Zeitraum)
+                    if (captured.TeamId.HasValue)
+                    {
+                        var team = _teams.FirstOrDefault(t => t.Id == captured.TeamId.Value);
+                        flow.Controls.Add(MakeDeletableLine(flow.Width - 20, $"Team: {team?.Name ?? "Team"}{spanTxt}",
+                            () => DeleteTeamCascade(captured, day, f), "Team löschen (Fahrzeug & Baustelle ebenfalls)"));
+                    }
+
+                    // Fahrzeug (löschen oder ersetzen)
+                    if (captured.VehicleId.HasValue)
+                    {
+                        var vehicle = _vehicles.FirstOrDefault(v => v.Id == captured.VehicleId.Value);
+                        flow.Controls.Add(MakeDeletableLine(flow.Width - 20, $"Fahrzeug: {vehicle?.VehicleNumber ?? "Fahrzeug"}{spanTxt}",
+                            () => DeleteVehicle(captured, day, f), "Fahrzeug löschen oder ersetzen"));
+                    }
+
+                    // Mitarbeiter (einzeln löschbar)
+                    var empRows = captured.Assignments.Where(a => a.EmployeeId.HasValue)
+                                        .GroupBy(a => a.EmployeeId!.Value)
+                                        .Select(g => g.First())
+                                        .OrderBy(a => a.Employee?.FullName)
+                                        .ToList();
+                    foreach (var er in empRows)
+                    {
+                        var emp = er.Employee ?? _employees.FirstOrDefault(e => e.Id == er.EmployeeId!.Value);
+                        flow.Controls.Add(MakeDeletableLine(flow.Width - 20, $"Mitarbeiter: {emp?.FullName ?? "MA"}",
+                            () => DeleteEmployeeRow(er, day, f), "Mitarbeiter löschen"));
+                    }
                 }
             }
         }
@@ -888,7 +914,7 @@ public class MainForm : Form
                 var name = v.Employee?.FullName ?? $"MA {v.EmployeeId}";
                 var suffix = v.StartDate.Date == v.EndDate.Date ? "" : $"  ({v.StartDate:dd.MM.}–{v.EndDate:dd.MM.})";
                 var vid = v.Id;
-                flow.Controls.Add(MakeDeletableLine(flow.Width, $"Urlaub: {name}{suffix}", () =>
+                flow.Controls.Add(MakeDeletableLine(flow.Width - 20, $"Urlaub: {name}{suffix}", () =>
                 {
                     if (MessageBox.Show($"Urlaub löschen?\n{name}{suffix}", "Urlaub löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                     {
@@ -915,7 +941,7 @@ public class MainForm : Form
                 var name = s.Employee?.FullName ?? $"MA {s.EmployeeId}";
                 var suffix = s.StartDate.Date == s.EndDate.Date ? "" : $"  ({s.StartDate:dd.MM.}–{s.EndDate:dd.MM.})";
                 var sid = s.Id;
-                flow.Controls.Add(MakeDeletableLine(flow.Width, $"Krank: {name}{suffix}", () =>
+                flow.Controls.Add(MakeDeletableLine(flow.Width - 20, $"Krank: {name}{suffix}", () =>
                 {
                     if (MessageBox.Show($"Krankheit löschen?\n{name}{suffix}", "Krankheit löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                     {
@@ -933,17 +959,28 @@ public class MainForm : Form
         f.ShowDialog();
     }
 
-    private Panel MakeDeletableLine(int parentWidth, string text, Action onDelete)
+    private Panel MakeDeletableLine(int parentWidth, string text, Action onDelete, string? tooltip = null)
     {
-        var line = new Panel { Width = parentWidth - 44, Height = 32, Margin = new Padding(8, 0, 0, 2), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
-        var lbl = new Label { Text = text, Location = new Point(6, 4), AutoSize = true, MaximumSize = new Size(line.Width - 40, 0), Padding = new Padding(0, 3, 0, 0) };
-        var btnX = new Button { Text = "X", Width = 26, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand };
+        var innerWidth = parentWidth - 44;
+        // Measure the wrapped text height so the panel grows to fit the full text (no clipping).
+        var measure = new Label { AutoSize = true, MaximumSize = new Size(innerWidth - 12, 0), Text = text, Font = Font };
+        var textH = measure.GetPreferredSize(Size.Empty).Height;
+        var height = Math.Max(28, textH + 12);
+        var line = new Panel { Width = parentWidth - 44, Height = height, Margin = new Padding(8, 0, 0, 4), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
+        var lbl = new Label { Text = text, Location = new Point(6, 6), AutoSize = true, MaximumSize = new Size(innerWidth - 12, 0), Font = Font };
+        var btnX = new Button { Text = "X", Width = 28, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand };
         StyleButton(btnX);
         btnX.FlatAppearance.BorderSize = 0;
-        btnX.Location = new Point(line.Width - 26 - 2, 4);
+        btnX.Location = new Point(line.Width - 28 - 2, (height - 24) / 2);
         btnX.Click += (_, _) => onDelete();
         line.Controls.Add(lbl);
         line.Controls.Add(btnX);
+        if (tooltip != null)
+        {
+            var tip = new ToolTip();
+            tip.SetToolTip(btnX, tooltip);
+            tip.SetToolTip(lbl, text);
+        }
         return line;
     }
 
@@ -976,17 +1013,16 @@ public class MainForm : Form
         var groups = allAssignments
                         .Where(a => siteId == null || a.ConstructionSiteId == siteId)
                         .Where(a => a.Date.Date == day.Date)
-                        .GroupBy(a => (a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId))
+                        // Group by (site, team, vehicle): employees belong to the team/vehicle
+                        // assignment and are listed individually as deletable sub-rows.
+                        .GroupBy(a => (a.ConstructionSiteId, a.TeamId, a.VehicleId))
                         .Select(g =>
                         {
                             var key = g.Key;
-                            // Resolve the full span of this assignment key across the whole visible range
-                            // (so multi-day entries are detected even when opening a single day).
                             var all = allAssignments
                                 .Where(a => a.ConstructionSiteId == key.ConstructionSiteId
                                          && a.TeamId == key.TeamId
-                                         && a.VehicleId == key.VehicleId
-                                         && a.EmployeeId == key.EmployeeId)
+                                         && a.VehicleId == key.VehicleId)
                                 .ToList();
                             var dates = all.Select(a => a.Date.Date).Distinct().OrderBy(d => d).ToList();
                             var min = dates.Min();
@@ -995,16 +1031,10 @@ public class MainForm : Form
                             var site = a0.Site ?? _sites.FirstOrDefault(s => s.Id == a0.ConstructionSiteId);
                             var team = a0.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == a0.TeamId.Value) : null;
                             var vehicle = a0.Vehicle ?? (a0.VehicleId.HasValue ? _vehicles.FirstOrDefault(v => v.Id == a0.VehicleId.Value) : null);
-                            var emp = a0.Employee ?? (a0.EmployeeId.HasValue ? _employees.FirstOrDefault(e => e.Id == a0.EmployeeId.Value) : null);
 
                             var parts = new List<string>();
                             if (team != null) parts.Add(team.Name);
                             if (vehicle != null) parts.Add(vehicle.VehicleNumber);
-                            if (emp != null) parts.Add(emp.FullName);
-                            // Team members for context (resolved from the team list which carries Members)
-                            if (team != null)
-                                foreach (var m in team.Members.OrderBy(m => m.FullName))
-                                    parts.Add("  • " + m.FullName);
                             var label = parts.Count > 0 ? string.Join("\n", parts) : (site?.Name ?? "Eintrag");
 
                             return new AssignmentEntry
@@ -1012,7 +1042,6 @@ public class MainForm : Form
                                 ConstructionSiteId = a0.ConstructionSiteId,
                                 TeamId = a0.TeamId,
                                 VehicleId = a0.VehicleId,
-                                EmployeeId = a0.EmployeeId,
                                 From = min,
                                 To = max,
                                 Assignments = all,
@@ -1024,50 +1053,124 @@ public class MainForm : Form
         return groups;
     }
 
-    private void DeleteEntry(AssignmentEntry entry, DateTime day, Form owner)
+    // Asks whether to delete the whole span or only the opened day.
+    // Returns the days to delete, or null if cancelled.
+    private List<DateTime>? AskSpan(AssignmentEntry entry, DateTime day, string title)
     {
-        if (entry.MultiDay)
+        if (!entry.MultiDay)
         {
-            using var dlg = new Form();
-            dlg.Text = "Löschen – Mehrfachzuweisung";
-            dlg.Size = new Size(440, 240);
-            dlg.StartPosition = FormStartPosition.CenterParent;
-            dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
-            dlg.MaximizeBox = dlg.MinimizeBox = false;
-            dlg.Font = Font;
-            dlg.Controls.Add(new Label { Text = $"{entry.Label.Replace("\n", "  ")}\n{entry.From:dd.MM.yyyy} – {entry.To:dd.MM.yyyy}", Location = new Point(16, 16), AutoSize = true });
-            dlg.Controls.Add(new Label { Text = "Wie soll gelöscht werden?", Location = new Point(16, 56), AutoSize = true });
-            var btnWhole = new Button { Text = "Ganzer Termin", Location = new Point(16, 110), Width = 185, Height = 38, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
-            StyleButton(btnWhole);
-            var btnDay = new Button { Text = "Nur an diesem Tag", Location = new Point(211, 110), Width = 185, Height = 38 };
-            StyleButton(btnDay);
-            var result = 0;
-            btnWhole.Click += (_, _) => { result = 1; dlg.Close(); };
-            btnDay.Click += (_, _) => { result = 2; dlg.Close(); };
-            dlg.Controls.AddRange(new Control[] { btnWhole, btnDay });
-            dlg.ShowDialog(owner);
+            if (MessageBox.Show($"{title}?\n{entry.Label.Replace("\n", "  ")}\n{entry.From:dd.MM.yyyy}", title,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return null;
+            return new List<DateTime> { day.Date };
+        }
 
-            if (result == 1)
+        using var dlg = new Form();
+        dlg.Text = title;
+        dlg.Size = new Size(460, 250);
+        dlg.StartPosition = FormStartPosition.CenterParent;
+        dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
+        dlg.MaximizeBox = dlg.MinimizeBox = false;
+        dlg.Font = Font;
+        dlg.Controls.Add(new Label { Text = $"{entry.Label.Replace("\n", "  ")}\n{entry.From:dd.MM.yyyy} – {entry.To:dd.MM.yyyy}", Location = new Point(16, 16), AutoSize = true });
+        dlg.Controls.Add(new Label { Text = "Wie soll gelöscht werden?", Location = new Point(16, 56), AutoSize = true });
+        var btnWhole = new Button { Text = "Ganzer Termin", Location = new Point(16, 110), Width = 195, Height = 38, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
+        StyleButton(btnWhole);
+        var btnDay = new Button { Text = "Nur an diesem Tag", Location = new Point(229, 110), Width = 195, Height = 38 };
+        StyleButton(btnDay);
+        var result = 0;
+        btnWhole.Click += (_, _) => { result = 1; dlg.Close(); };
+        btnDay.Click += (_, _) => { result = 2; dlg.Close(); };
+        dlg.Controls.AddRange(new Control[] { btnWhole, btnDay });
+        dlg.ShowDialog();
+
+        if (result == 1)
+            return entry.Assignments.Select(a => a.Date.Date).Distinct().ToList();
+        if (result == 2)
+            return new List<DateTime> { day.Date };
+        return null;
+    }
+
+    // Team löschen -> über denselben Zeitraum auch Fahrzeug und Baustelle entfernen.
+    private void DeleteTeamCascade(AssignmentEntry entry, DateTime day, Form owner)
+    {
+        var days = AskSpan(entry, day, "Team löschen");
+        if (days == null) return;
+
+        // Alle Zeilen dieses (Baustelle, Team, Fahrzeug)-Zusammenhangs im Zeitraum entfernen.
+        // Dadurch verschwinden Team, Fahrzeug und Baustelle gemeinsam (Fahrzeug/Team ohne
+        // einander bzw. Baustelle ohne Fahrzeug+Team sind nicht sinnvoll).
+        foreach (var a in entry.Assignments.Where(a => days.Contains(a.Date.Date)))
+            _db.DeleteAssignment(a.Id);
+
+        RefreshAllData();
+        owner.Close();
+    }
+
+    // Fahrzeug löschen oder durch ein anderes (freies) Fahrzeug ersetzen.
+    private void DeleteVehicle(AssignmentEntry entry, DateTime day, Form owner)
+    {
+        var days = AskSpan(entry, day, "Fahrzeug löschen");
+        if (days == null) return;
+
+        var choice = MessageBox.Show(
+            $"Fahrzeug wirklich löschen?\n\nJa = Fahrzeug entfernen\nNein = anderes Fahrzeug zuweisen",
+            "Fahrzeug", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        if (choice == DialogResult.Cancel) return;
+
+        if (choice == DialogResult.No)
+        {
+            // Ersatz-Fahrzeug wählen, das an keinem der Tage schon anderswo zugewiesen ist.
+            var rows = entry.Assignments.Where(a => days.Contains(a.Date.Date)).ToList();
+            var candidates = _vehicles.Where(v => days.All(d => !_db.IsVehicleAssigned(v.Id, d,
+                excludeIds: rows.Select(r => r.Id).ToList()))).ToList();
+            if (candidates.Count == 0)
             {
-                foreach (var a in entry.Assignments)
-                    _db.DeleteAssignment(a.Id);
+                MessageBox.Show("Kein freies Fahrzeug verfügbar (alle sind an einem der Tage bereits zugewiesen).",
+                    "Fahrzeug", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
-            else if (result == 2)
-            {
-                foreach (var a in entry.Assignments.Where(a => a.Date.Date == day.Date))
-                    _db.DeleteAssignment(a.Id);
-            }
-            else return;
+            using var f = new Form();
+            f.Text = "Ersatz-Fahrzeug wählen";
+            f.Size = new Size(420, 300);
+            f.StartPosition = FormStartPosition.CenterParent;
+            f.Font = Font;
+            var lb = new ListBox { Dock = DockStyle.Fill, DataSource = candidates, DisplayMember = "ToString" };
+            var btn = new Button { Text = "Übernehmen", Dock = DockStyle.Bottom };
+            StyleButton(btn);
+            Vehicle? sel = null;
+            btn.Click += (_, _) => { sel = lb.SelectedItem as Vehicle; f.Close(); };
+            f.Controls.Add(lb); f.Controls.Add(btn);
+            f.ShowDialog();
+            if (sel == null) return;
+            foreach (var r in rows) { r.VehicleId = sel.Id; _db.SaveAssignment(r); }
         }
         else
         {
-            if (MessageBox.Show($"Eintrag löschen?\n{entry.Label.Replace("\n", "  ")}\n{entry.From:dd.MM.yyyy}", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-                return;
-            foreach (var a in entry.Assignments)
-                _db.DeleteAssignment(a.Id);
+            // Fahrzeug aus den Zeilen entfernen (Baustelle/Team bleiben erhalten).
+            foreach (var a in entry.Assignments.Where(a => days.Contains(a.Date.Date)))
+            {
+                a.VehicleId = null;
+                _db.SaveAssignment(a);
+            }
         }
 
-        RefreshCalendar();
+        RefreshAllData();
+        owner.Close();
+    }
+
+    // Einzelnen Mitarbeiter aus dem Termin entfernen.
+    private void DeleteEmployeeRow(Assignment row, DateTime day, Form owner)
+    {
+        var emp = row.Employee ?? _employees.FirstOrDefault(e => e.Id == row.EmployeeId);
+        var name = emp?.FullName ?? "Mitarbeiter";
+        var scopeTxt = row.Date.Date == day.Date ? day : row.Date;
+        if (MessageBox.Show($"Mitarbeiter löschen?\n{name}\n{row.Date:dd.MM.yyyy}", "Mitarbeiter löschen",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        _db.DeleteAssignment(row.Id);
+        RefreshAllData();
         owner.Close();
     }
 
