@@ -9,6 +9,7 @@ public class MainForm : Form
     private readonly DatabaseService _db;
     private readonly BackupService _backup;
     private readonly UpdateService _update;
+    private readonly SettingsService _settings;
     private DateTime _currentMonth = new(DateTime.Now.Year, DateTime.Now.Month, 1);
     private int _calendarDayWidth, _calendarDayHeight;
     private readonly Point _calendarOrigin = new(15, 45);
@@ -40,6 +41,7 @@ public class MainForm : Form
     private bool _dragIsAssignment;
     private bool _suppressClick;
     private Point _dragStartPoint;
+    private Team? _selectedTeam;
 
     private static void StyleButton(Button btn)
     {
@@ -55,8 +57,9 @@ public class MainForm : Form
         btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(0x00, 0x5C, 0x00);
     }
 
-    public MainForm(DatabaseService db, BackupService backup, UpdateService update)
+    public MainForm(DatabaseService db, BackupService backup, UpdateService update, SettingsService settings)
     {
+        _settings = settings;
         _db = db;
         _backup = backup;
         _update = update;
@@ -65,10 +68,12 @@ public class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9.5f);
 
-        var menu = new MenuStrip();
+        var menu = new MenuStrip { Dock = DockStyle.Top, AutoSize = false, Height = 24, Padding = new Padding(0) };
         var dateiMenu = menu.Items.Add("&Datei") as ToolStripMenuItem;
         dateiMenu!.DropDownItems.Add("Datenbank sichern...", null, async (_, _) => await DoBackup());
         dateiMenu.DropDownItems.Add("Google Drive Backup...", null, (_, _) => ConfigureBackup());
+        dateiMenu.DropDownItems.Add(new ToolStripSeparator());
+        dateiMenu.DropDownItems.Add("Einstellungen...", null, (_, _) => OpenSettings());
         dateiMenu.DropDownItems.Add(new ToolStripSeparator());
         dateiMenu.DropDownItems.Add("Beenden", null, (_, _) => Close());
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
@@ -77,7 +82,7 @@ public class MainForm : Form
         MainMenuStrip = menu;
         Controls.Add(menu);
 
-        // Main TabControl
+        // Main TabControl. Reserve exactly the tab-strip height so nothing is clipped.
         _tabControl = new TabControl { Dock = DockStyle.Fill, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(210, 36) };
         _tabControl.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
         _tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
@@ -131,8 +136,12 @@ public class MainForm : Form
         var colEmp = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 4, 0) };
         var empHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
         empHeader.Controls.Add(new Label { Text = "Mitarbeiter", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
-        var btnEmpNew = new Button { Text = "NEU", Width = 90, Height = 28, Dock = DockStyle.Right }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
-        empHeader.Controls.Add(btnEmpNew);
+        var empBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
+        var btnEmpNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
+        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
+        var btnEmpDel = new Button { Text = "Löschen", Width = 85, Height = 28 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
+        empBtns.Controls.AddRange(new Control[] { btnEmpEdit, btnEmpDel, btnEmpNew });
+        empHeader.Controls.Add(empBtns);
         _lbEmployees = new ListBox { Dock = DockStyle.Fill, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 40 };
         _lbEmployees.DrawItem += EmployeeList_DrawItem;
         _lbEmployees.MouseDown += EmployeeList_MouseDown;
@@ -144,8 +153,14 @@ public class MainForm : Form
         var colTeam = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 0, 4, 0) };
         var teamHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
         teamHeader.Controls.Add(new Label { Text = "Teams", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
+        var teamBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
+        var btnTeamNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnTeamNew.Click += (_, _) => EditTeam(null); StyleButton(btnTeamNew);
+        var btnTeamEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnTeamEdit.Click += (_, _) => { if (_selectedTeam != null) EditTeam(_selectedTeam); }; StyleButton(btnTeamEdit);
+        var btnTeamDel = new Button { Text = "Loschen", Width = 85, Height = 28 }; btnTeamDel.Click += (_, _) => { if (_selectedTeam != null) DeleteTeam(_selectedTeam); }; StyleButton(btnTeamDel);
+        teamBtns.Controls.AddRange(new Control[] { btnTeamEdit, btnTeamDel, btnTeamNew });
+        teamHeader.Controls.Add(teamBtns);
         colTeam.Controls.Add(teamHeader);
-        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(2, 2, 2, 4) };
+        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(2, 8, 2, 4) };
         _flowTeamCards.Resize += (_, _) => LayoutTeamCards();
         _pnlNewTeamDropZone = new Panel
         {
@@ -205,6 +220,14 @@ public class MainForm : Form
         tabSite.Controls.Add(siteBtns);
         _tabControl.TabPages.Add(tabSite);
 
+        // ========== TAB 5: MITARBEITER INFORMIEREN ==========
+        var tabInform = new TabPage("Mitarbeiter informieren");
+        var btnOpenInform = new Button { Text = "Mitarbeiter informieren...", Dock = DockStyle.Fill, Font = new Font("Segoe UI", 14, FontStyle.Bold) };
+        StyleButton(btnOpenInform);
+        btnOpenInform.Click += (_, _) => OpenInform();
+        tabInform.Controls.Add(btnOpenInform);
+        _tabControl.TabPages.Add(tabInform);
+
         // Initial load
         RefreshAllData();
         RefreshCalendar();
@@ -221,6 +244,18 @@ public class MainForm : Form
     {
         base.OnLoad(e);
         LayoutTeamCards();
+    }
+
+    private void OpenSettings()
+    {
+        using var f = new SettingsForm(_settings);
+        f.ShowDialog(this);
+    }
+
+    private void OpenInform()
+    {
+        using var f = new InformEmployeesForm(_db, _settings);
+        f.ShowDialog(this);
     }
 
     // ====== REFRESH ======
@@ -266,6 +301,8 @@ public class MainForm : Form
             var delBtn = card.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "X");
             if (editBtn != null) { editBtn.Left = card.Width - 98; editBtn.Top = 6; }
             if (delBtn != null) { delBtn.Left = card.Width - 48; delBtn.Top = 6; }
+            card.BackColor = (card.Tag is Team t && _selectedTeam != null && t.Id == _selectedTeam.Id)
+                ? Color.FromArgb(0xD8, 0xF0, 0xDC) : Color.White;
         }
     }
 
@@ -384,26 +421,35 @@ public class MainForm : Form
 
     private void DrawDayLines(Graphics g, DateTime date, List<Assignment> day, int x, int y)
     {
-        var team = day.FirstOrDefault(a => a.Team != null)?.Team;
-        var connected = team != null;
-        var fill = connected ? team!.Color : Color.White;
-        var border = connected ? team!.Color : Color.Black;
-        var text = connected ? Color.White : Color.Black;
-
         var lines = new List<(string Label, Color Fill, Color Border, Color Text)>();
 
-        foreach (var site in day.Select(a => a.Site).OfType<ConstructionSite>().DistinctBy(s => s.Id).OrderBy(s => s.Name))
-            lines.Add((site.Name, fill, border, text));
+        var teamAssignments = day.Where(a => a.Team != null).ToList();
+        var connectedSiteIds = new HashSet<int>();
 
-        foreach (var t in day.Select(a => a.Team).OfType<Team>().DistinctBy(t => t.Id).OrderBy(t => t.Name))
+        foreach (var ta in teamAssignments)
         {
-            var tf = connected ? t.Color : Color.White;
-            var tb = connected ? t.Color : Color.Black;
-            lines.Add((t.Name, tf, tb, text));
+            var team = ta.Team!;
+            var site = ta.Site!;
+            connectedSiteIds.Add(site.Id);
+            var color = team.Color;
+            var vehicles = day.Where(a => a.Vehicle != null && a.ConstructionSiteId == site.Id)
+                              .Select(a => a.Vehicle!).DistinctBy(v => v.Id)
+                              .OrderBy(v => v.VehicleNumber).ToList();
+            var vehicleText = vehicles.Count > 0 ? string.Join(", ", vehicles.Select(v => v.VehicleNumber)) : "–";
+            lines.Add(($"{site.Name} / {team.Name} / {vehicleText}", color, color, Color.White));
         }
 
-        foreach (var v in day.Select(a => a.Vehicle).OfType<Vehicle>().DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber))
-            lines.Add((v.VehicleNumber, fill, border, text));
+        foreach (var site in day.Select(a => a.Site).OfType<ConstructionSite>()
+                     .Where(s => !connectedSiteIds.Contains(s.Id)).DistinctBy(s => s.Id).OrderBy(s => s.Name))
+            lines.Add((site.Name, Color.White, Color.Black, Color.Black));
+
+        foreach (var v in day.Select(a => a.Vehicle).OfType<Vehicle>()
+                     .Where(v => !connectedSiteIds.Contains(v.Id == 0 ? -1 : day.First(a => a.Vehicle != null && a.Vehicle.Id == v.Id).ConstructionSiteId))
+                     .DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber))
+            lines.Add((v.VehicleNumber, Color.White, Color.Black, Color.Black));
+
+        foreach (var emp in day.Select(a => a.Employee).OfType<Employee>().DistinctBy(e => e.Id).OrderBy(e => e.FullName))
+            lines.Add(($"PN: {emp.FullName}", Color.White, Color.Black, Color.Black));
 
         using var sf = new Font(Font.FontFamily, 7);
         int ly = y + 16;
@@ -418,7 +464,7 @@ public class MainForm : Form
             g.FillRectangle(fb, lx, ly, lw, lineH);
             using var bp = new Pen(lb, 1);
             g.DrawRectangle(bp, lx, ly, lw, lineH);
-            var detail = label.Length > 18 ? label[..15] + ".." : label;
+            var detail = label.Length > 22 ? label[..19] + ".." : label;
             using var tb = new SolidBrush(lt);
             g.DrawString(detail, sf, tb, lx + 2, ly + 1);
             ly += lineH + 1;
@@ -968,7 +1014,12 @@ public class MainForm : Form
 
         card.MouseClick += (s, e) =>
         {
-            if (e.Button == MouseButtons.Right)
+            if (e.Button == MouseButtons.Left)
+            {
+                _selectedTeam = team;
+                RefreshTeamView();
+            }
+            else if (e.Button == MouseButtons.Right)
                 ShowTeamContextMenu(team, card.PointToScreen(e.Location));
         };
 

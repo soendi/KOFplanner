@@ -118,6 +118,16 @@ public class DatabaseService
             up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (2)";
             up.ExecuteNonQuery();
         }
+
+        if (version < 3)
+        {
+            using var c4 = conn.CreateCommand();
+            c4.CommandText = "ALTER TABLE Employees ADD COLUMN PaperPrint INTEGER NOT NULL DEFAULT 0";
+            c4.ExecuteNonQuery();
+            using var up = conn.CreateCommand();
+            up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (3)";
+            up.ExecuteNonQuery();
+        }
     }
 
     public SqliteConnection GetConnection()
@@ -143,7 +153,8 @@ public class DatabaseService
                 LastName = r.GetString(2),
                 HasDriversLicense = r.GetInt32(3) == 1,
                 LicenseCategories = r.IsDBNull(4) ? "" : r.GetString(4),
-                Email = r.IsDBNull(5) ? "" : r.GetString(5)
+                Email = r.IsDBNull(5) ? "" : r.GetString(5),
+                PaperPrint = !r.IsDBNull(6) && r.GetInt32(6) == 1
             });
         return list;
     }
@@ -154,23 +165,25 @@ public class DatabaseService
         using var cmd = conn.CreateCommand();
         if (e.Id == 0)
         {
-            cmd.CommandText = "INSERT INTO Employees (FirstName, LastName, Email, HasDriversLicense, VehicleCategory) VALUES (@fn, @ln, @em, @dl, @vc); SELECT last_insert_rowid()";
+            cmd.CommandText = "INSERT INTO Employees (FirstName, LastName, Email, HasDriversLicense, VehicleCategory, PaperPrint) VALUES (@fn, @ln, @em, @dl, @vc, @pp); SELECT last_insert_rowid()";
             cmd.Parameters.AddWithValue("@fn", e.FirstName);
             cmd.Parameters.AddWithValue("@ln", e.LastName);
             cmd.Parameters.AddWithValue("@em", e.Email);
             cmd.Parameters.AddWithValue("@dl", e.HasDriversLicense ? 1 : 0);
             cmd.Parameters.AddWithValue("@vc", e.LicenseCategories);
+            cmd.Parameters.AddWithValue("@pp", e.PaperPrint ? 1 : 0);
             e.Id = (int)(long)cmd.ExecuteScalar()!;
         }
         else
         {
-            cmd.CommandText = "UPDATE Employees SET FirstName=@fn, LastName=@ln, Email=@em, HasDriversLicense=@dl, VehicleCategory=@vc WHERE Id=@id";
+            cmd.CommandText = "UPDATE Employees SET FirstName=@fn, LastName=@ln, Email=@em, HasDriversLicense=@dl, VehicleCategory=@vc, PaperPrint=@pp WHERE Id=@id";
             cmd.Parameters.AddWithValue("@id", e.Id);
             cmd.Parameters.AddWithValue("@fn", e.FirstName);
             cmd.Parameters.AddWithValue("@ln", e.LastName);
             cmd.Parameters.AddWithValue("@em", e.Email);
             cmd.Parameters.AddWithValue("@dl", e.HasDriversLicense ? 1 : 0);
             cmd.Parameters.AddWithValue("@vc", e.LicenseCategories);
+            cmd.Parameters.AddWithValue("@pp", e.PaperPrint ? 1 : 0);
             cmd.ExecuteNonQuery();
         }
     }
@@ -451,6 +464,91 @@ public class DatabaseService
                 a.Vehicle = new Vehicle { Id = a.VehicleId ?? 0, RequiredLicense = r.GetString(9), VehicleNumber = r.GetString(10), LicensePlate = r.GetString(11) };
             if (!r.IsDBNull(12))
                 a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(12), LastName = r.GetString(13) };
+            list.Add(a);
+        }
+        return list;
+    }
+
+    public List<Assignment> GetAssignmentsForEmployee(int employeeId, DateTime from, DateTime until)
+    {
+        var list = new List<Assignment>();
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT a.*, cs.Name, cs.Location, cs.StartDate, cs.EndDate,
+                   t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
+                   e.FirstName, e.LastName
+            FROM Assignments a
+            JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
+            LEFT JOIN Teams t ON a.TeamId = t.Id
+            LEFT JOIN Vehicles v ON a.VehicleId = v.Id
+            LEFT JOIN Employees e ON a.EmployeeId = e.Id
+            WHERE a.EmployeeId = @eid AND a.Date >= @s AND a.Date <= @u
+            ORDER BY a.Date, cs.Name";
+        cmd.Parameters.AddWithValue("@eid", employeeId);
+        cmd.Parameters.AddWithValue("@s", from.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("@u", until.ToString("yyyy-MM-dd"));
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var a = new Assignment
+            {
+                Id = r.GetInt32(0),
+                ConstructionSiteId = r.GetInt32(1),
+                TeamId = r.IsDBNull(2) ? null : r.GetInt32(2),
+                VehicleId = r.IsDBNull(3) ? null : r.GetInt32(3),
+                EmployeeId = r.IsDBNull(4) ? null : r.GetInt32(4),
+                Date = DateTime.Parse(r.GetString(5)),
+                Site = new ConstructionSite { Id = r.GetInt32(1), Name = r.GetString(6), Address = r.IsDBNull(7) ? "" : r.GetString(7), StartDate = DateTime.Parse(r.GetString(8)), EndDate = r.IsDBNull(9) ? null : DateTime.Parse(r.GetString(9)) }
+            };
+            if (!r.IsDBNull(10))
+                a.Team = new Team { Id = a.TeamId ?? 0, Name = r.GetString(10) };
+            if (!r.IsDBNull(11))
+                a.Vehicle = new Vehicle { Id = a.VehicleId ?? 0, RequiredLicense = r.GetString(11), VehicleNumber = r.GetString(12), LicensePlate = r.GetString(13) };
+            if (!r.IsDBNull(14))
+                a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(14), LastName = r.GetString(15) };
+            list.Add(a);
+        }
+        return list;
+    }
+
+    public List<Assignment> GetAllAssignments(DateTime from, DateTime until)
+    {
+        var list = new List<Assignment>();
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT a.*, cs.Name, cs.Location, cs.StartDate, cs.EndDate,
+                   t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
+                   e.FirstName, e.LastName
+            FROM Assignments a
+            JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
+            LEFT JOIN Teams t ON a.TeamId = t.Id
+            LEFT JOIN Vehicles v ON a.VehicleId = v.Id
+            LEFT JOIN Employees e ON a.EmployeeId = e.Id
+            WHERE a.Date >= @s AND a.Date <= @u
+            ORDER BY a.Date, cs.Name";
+        cmd.Parameters.AddWithValue("@s", from.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("@u", until.ToString("yyyy-MM-dd"));
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var a = new Assignment
+            {
+                Id = r.GetInt32(0),
+                ConstructionSiteId = r.GetInt32(1),
+                TeamId = r.IsDBNull(2) ? null : r.GetInt32(2),
+                VehicleId = r.IsDBNull(3) ? null : r.GetInt32(3),
+                EmployeeId = r.IsDBNull(4) ? null : r.GetInt32(4),
+                Date = DateTime.Parse(r.GetString(5)),
+                Site = new ConstructionSite { Id = r.GetInt32(1), Name = r.GetString(6), Address = r.IsDBNull(7) ? "" : r.GetString(7), StartDate = DateTime.Parse(r.GetString(8)), EndDate = r.IsDBNull(9) ? null : DateTime.Parse(r.GetString(9)) }
+            };
+            if (!r.IsDBNull(10))
+                a.Team = new Team { Id = a.TeamId ?? 0, Name = r.GetString(10) };
+            if (!r.IsDBNull(11))
+                a.Vehicle = new Vehicle { Id = a.VehicleId ?? 0, RequiredLicense = r.GetString(11), VehicleNumber = r.GetString(12), LicensePlate = r.GetString(13) };
+            if (!r.IsDBNull(14))
+                a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(14), LastName = r.GetString(15) };
             list.Add(a);
         }
         return list;

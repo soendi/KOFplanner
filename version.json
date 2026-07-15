@@ -1,4 +1,4 @@
 {
-  "version": "1.1.9.0",
-  "notes": "Splash-Screen beim Start (Resources/splashscreen.png als EmbeddedResource, 2,5s)"
+  "version": "1.1.10.0",
+  "notes": "Tab 'Mitarbeiter informieren' (PDF pro Mitarbeiter per Woche/Monat/Spannweite + Baustelle/Team, Drucken + E-Mail); Einstellungen (E-Mail-SMTP + Standarddrucker); Bearbeiten/Löschen für Mitarbeiter und Teams in der Spalten-Kopfzeile"
 }

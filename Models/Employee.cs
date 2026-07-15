@@ -10,6 +10,7 @@ public class Employee
     public string Email { get; set; } = "";
     public bool HasDriversLicense { get; set; }
     public string LicenseCategories { get; set; } = "";
+    public bool PaperPrint { get; set; }
 
     public string FullName => $"{FirstName} {LastName}";
 

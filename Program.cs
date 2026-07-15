@@ -20,11 +20,12 @@ static class Program
             var db = new DatabaseService(dbPath);
             var backup = new BackupService(dbPath);
             var update = new UpdateService();
+            var settings = new SettingsService(dbDir);
 
             using (var splash = new SplashForm())
                 splash.ShowDialog();
 
-            Application.Run(new MainForm(db, backup, update));
+            Application.Run(new MainForm(db, backup, update, settings));
         }
         catch (Exception ex)
         {

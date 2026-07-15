@@ -9,6 +9,7 @@ public class EmployeeForm : Form
     private readonly Employee? _employee;
     private readonly TextBox _txtFirst, _txtLast, _txtEmail;
     private readonly CheckBox _chkLicense;
+    private readonly CheckBox _chkPaper;
     private readonly CheckedListBox _clbCategories;
 
     public EmployeeForm(DatabaseService db, Employee? employee)
@@ -47,12 +48,16 @@ public class EmployeeForm : Form
             _clbCategories.Items.Add(cat, false);
         tlp.Controls.Add(_clbCategories, 1, 4);
 
+        tlp.Controls.Add(new Label { Text = "Papierdruck:", Anchor = AnchorStyles.Left }, 0, 5);
+        _chkPaper = new CheckBox { Text = "Einsatzplan als Papierausdruck senden", AutoSize = true };
+        tlp.Controls.Add(_chkPaper, 1, 5);
+
         var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.LeftToRight, Height = 40 };
         var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, Cursor = Cursors.Hand };
         btnOk.Click += (_, _) => Save();
         var btnCancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 80, FlatStyle = FlatStyle.Flat };
         btnPanel.Controls.AddRange(new Control[] { btnOk, btnCancel });
-        tlp.Controls.Add(btnPanel, 0, 5);
+        tlp.Controls.Add(btnPanel, 0, 6);
         tlp.SetColumnSpan(btnPanel, 2);
         Controls.Add(tlp);
 
@@ -63,6 +68,7 @@ public class EmployeeForm : Form
             _txtEmail.Text = employee.Email;
             _chkLicense.Checked = employee.HasDriversLicense;
             _clbCategories.Enabled = employee.HasDriversLicense;
+            _chkPaper.Checked = employee.PaperPrint;
             foreach (var cat in employee.GetLicenseList())
             {
                 var idx = _clbCategories.Items.IndexOf(cat);
@@ -85,6 +91,7 @@ public class EmployeeForm : Form
         emp.Email = _txtEmail.Text.Trim();
         emp.HasDriversLicense = _chkLicense.Checked;
         emp.SetLicenseList(_clbCategories.CheckedItems.Cast<string>().ToArray());
+        emp.PaperPrint = _chkPaper.Checked;
         _db.SaveEmployee(emp);
     }
 
