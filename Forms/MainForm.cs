@@ -32,10 +32,10 @@ public class MainForm : Form
         private readonly ListBox _lbEmployees;
         private readonly FlowLayoutPanel _flowTeamCards;
         private readonly Panel _pnlNewTeamDropZone;
-        private readonly ListBox _lbVehicles;
+        private readonly FlowLayoutPanel _flowVehicles;
 
     // Tab 4 controls (Sites)
-    private readonly ListBox _lbSites;
+    private readonly FlowLayoutPanel _flowSites;
 
     // Calendar drag selection
     private DateTime? _dragStartDate, _dragEndDate, _dragCurrentDate;
@@ -153,12 +153,12 @@ public class MainForm : Form
         var empBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
         var btnEmpNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
         var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
-        var btnEmpDel = new Button { Text = "Löschen", Width = 85, Height = 28 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
-        empBtns.Controls.AddRange(new Control[] { btnEmpEdit, btnEmpDel, btnEmpNew });
+        empBtns.Controls.AddRange(new Control[] { btnEmpEdit, btnEmpNew });
         empHeader.Controls.Add(empBtns);
         _lbEmployees = new ListBox { Dock = DockStyle.Fill, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 40 };
         _lbEmployees.DrawItem += EmployeeList_DrawItem;
         _lbEmployees.MouseDown += EmployeeList_MouseDown;
+        _lbEmployees.MouseDoubleClick += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); };
         colEmp.Controls.Add(_lbEmployees);
         colEmp.Controls.Add(empHeader);
         t2Grid.Controls.Add(colEmp, 0, 0);
@@ -202,13 +202,11 @@ public class MainForm : Form
         vehHeader.Controls.Add(new Label { Text = "Fahrzeuge", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
         var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
         var btnVehNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
-        var btnVehEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); }; StyleButton(btnVehEdit);
-        var btnVehDel = new Button { Text = "Löschen", Width = 85, Height = 28 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); }; StyleButton(btnVehDel);
-        vehBtns.Controls.AddRange(new Control[] { btnVehEdit, btnVehDel, btnVehNew });
+        vehBtns.Controls.Add(btnVehNew);
         vehHeader.Controls.Add(vehBtns);
-        _lbVehicles = new ListBox { Dock = DockStyle.Fill, DisplayMember = "ToString" };
-        _lbVehicles.MouseDown += VehicleList_MouseDown;
-        colVeh.Controls.Add(_lbVehicles);
+        _flowVehicles = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(4) };
+        _flowVehicles.Resize += (_, _) => RelayoutCrudRows(_flowVehicles);
+        colVeh.Controls.Add(_flowVehicles);
         colVeh.Controls.Add(vehHeader);
         t2Grid.Controls.Add(colVeh, 2, 0);
 
@@ -217,13 +215,12 @@ public class MainForm : Form
 
         // ========== TAB 4: BAUSTELLEN ==========
         var tabSite = new TabPage("Baustellen");
-        _lbSites = new ListBox { Dock = DockStyle.Fill, DisplayMember = "DisplayText" };
+        _flowSites = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(4) };
+        _flowSites.Resize += (_, _) => RelayoutCrudRows(_flowSites);
         var siteBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
         var btnSiteNew = new Button { Text = "Neu", Width = 75 }; btnSiteNew.Click += (_, _) => EditSite(null); StyleButton(btnSiteNew);
-        var btnSiteEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnSiteEdit.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) EditSite(s); }; StyleButton(btnSiteEdit);
-        var btnSiteDel = new Button { Text = "Löschen", Width = 85, Height = 28 }; btnSiteDel.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) DeleteSite(s); }; StyleButton(btnSiteDel);
-        siteBtns.Controls.AddRange(new Control[] { btnSiteNew, btnSiteEdit, btnSiteDel });
-        tabSite.Controls.Add(_lbSites);
+        siteBtns.Controls.Add(btnSiteNew);
+        tabSite.Controls.Add(_flowSites);
         tabSite.Controls.Add(siteBtns);
         _tabControl.TabPages.Add(tabSite);
 
@@ -267,9 +264,54 @@ public class MainForm : Form
         _sickness = _db.GetAllSickness();
 
         _lbEmployees.DataSource = null; _lbEmployees.DataSource = _employees;
-        _lbVehicles.DataSource = null; _lbVehicles.DataSource = _vehicles;
         RefreshTeamView();
-        _lbSites.DataSource = null; _lbSites.DataSource = _sites;
+        RefreshVehicleList();
+        RefreshSiteList();
+    }
+
+    private void RefreshVehicleList()
+    {
+        _flowVehicles.Controls.Clear();
+        foreach (var v in _vehicles)
+        {
+            var text = v.ToString();
+            var row = MakeCrudRow(_flowVehicles.Width, text, () => DeleteVehicle(v),
+                onEdit: () => EditVehicle(v),
+                dragData: () => v);
+            _flowVehicles.Controls.Add(row);
+        }
+    }
+
+    private void RefreshSiteList()
+    {
+        _flowSites.Controls.Clear();
+        foreach (var s in _sites.OrderBy(s => s.Name))
+        {
+            var text = s.DisplayText;
+            var row = MakeCrudRow(_flowSites.Width, text, () => DeleteSite(s),
+                onEdit: () => EditSite(s));
+            _flowSites.Controls.Add(row);
+        }
+    }
+
+    private Panel MakeCrudRow(int parentWidth, string text, Action onDelete, Action? onEdit = null, Func<object>? dragData = null)
+    {
+        var line = new Panel { Width = Math.Max(180, parentWidth - 16), Height = 32, Margin = new Padding(0, 0, 0, 4), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
+        var lbl = new Label { Text = text, Location = new Point(6, 4), AutoSize = true, MaximumSize = new Size(line.Width - 40, 0), Padding = new Padding(0, 3, 0, 0), Cursor = dragData != null ? Cursors.Hand : Cursors.Default };
+        if (onEdit != null) lbl.DoubleClick += (_, _) => onEdit();
+        if (dragData != null)
+            lbl.MouseDown += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left && lbl.Parent is Panel p && p.ClientRectangle.Contains(e.Location) && e.Location.X < line.Width - 30)
+                    lbl.DoDragDrop(dragData(), DragDropEffects.Move);
+            };
+        var btnX = new Button { Text = "X", Width = 26, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand };
+        btnX.FlatAppearance.BorderSize = 0;
+        btnX.Location = new Point(line.Width - 26 - 2, 4);
+        btnX.Click += (_, _) => onDelete();
+        line.Controls.Add(lbl);
+        line.Controls.Add(btnX);
+        return line;
     }
 
     private void RefreshTeamView()
@@ -304,12 +346,6 @@ public class MainForm : Form
         }
     }
 
-    private void VehicleList_MouseDown(object? sender, MouseEventArgs e)
-    {
-        if (_lbVehicles.SelectedItem is Vehicle veh && e.Button == MouseButtons.Left)
-            _lbVehicles.DoDragDrop(veh, DragDropEffects.Move);
-    }
-
     private static Color GetContrastText(Color bg)
     {
         var lum = (0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B) / 255.0;
@@ -333,8 +369,18 @@ public class MainForm : Form
             ? Color.White : Color.FromArgb(0x66, 0x66, 0x66));
         e.Graphics.DrawString(name, nameFont, nameBrush, e.Bounds.Left + 5, e.Bounds.Top + 4);
         e.Graphics.DrawString(lic, licFont, licBrush, e.Bounds.Left + 5, e.Bounds.Top + 22);
+        // Red X delete button on the right
+        var xRect = new Rectangle(e.Bounds.Right - 30, e.Bounds.Top + 8, 22, 22);
+        using var xBrush = new SolidBrush(Color.FromArgb(0xF4, 0x43, 0x36));
+        e.Graphics.FillRectangle(xBrush, xRect);
+        using var xFont = new Font("Segoe UI", 10f, FontStyle.Bold);
+        using var xBrushText = new SolidBrush(Color.White);
+        var xsz = e.Graphics.MeasureString("X", xFont);
+        e.Graphics.DrawString("X", xFont, xBrushText, xRect.Left + (xRect.Width - xsz.Width) / 2, xRect.Top + (xRect.Height - xsz.Height) / 2);
         e.DrawFocusRectangle();
     }
+
+    public static Rectangle GetEmployeeXRect(Rectangle bounds) => new(bounds.Right - 30, bounds.Top + 8, 22, 22);
 
     private void Navigate(int step)
     {
@@ -901,6 +947,17 @@ public class MainForm : Form
         return line;
     }
 
+    private static void RelayoutCrudRows(FlowLayoutPanel flow)
+    {
+        foreach (Control c in flow.Controls)
+        {
+            if (c is not Panel line) continue;
+            line.Width = Math.Max(180, flow.ClientSize.Width - 16);
+            if (line.Controls[0] is Label lbl) lbl.MaximumSize = new Size(line.Width - 40, 0);
+            if (line.Controls[^1] is Button x) x.Location = new Point(line.Width - 26 - 2, 4);
+        }
+    }
+
     private sealed class AssignmentEntry
     {
         public int ConstructionSiteId { get; set; }
@@ -1037,6 +1094,19 @@ public class MainForm : Form
 
     private void CheckAutoVehicleAssignment(Team team, int siteId, DateTime from, DateTime until)
     {
+        // Team already has a preferred vehicle -> assign it silently, no prompt.
+        if (team.PreferredVehicleId.HasValue)
+        {
+            var pref = _vehicles.FirstOrDefault(v => v.Id == team.PreferredVehicleId.Value);
+            if (pref != null)
+            {
+                for (var d = from; d <= until; d = d.AddDays(1))
+                    if (!_db.IsVehicleAssigned(pref.Id, d))
+                        _db.SaveAssignment(new Assignment { ConstructionSiteId = siteId, VehicleId = pref.Id, Date = d });
+                return;
+            }
+        }
+
         var canDrive = team.Members.Where(m => m.HasDriversLicense && !string.IsNullOrEmpty(m.LicenseCategories))
             .SelectMany(m => m.GetLicenseList()).Distinct().ToList();
         var compat = _vehicles.Where(v => canDrive.Contains(v.RequiredLicense)).ToList();
@@ -1057,6 +1127,8 @@ public class MainForm : Form
         f.ShowDialog();
         if (sel != null)
         {
+            team.PreferredVehicleId = sel.Id;
+            _db.SaveTeam(team);
             for (var d = from; d <= until; d = d.AddDays(1))
             {
                 if (!_db.IsVehicleAssigned(sel.Id, d))
@@ -1228,8 +1300,23 @@ public class MainForm : Form
     // ====== TAB 2 DRAG & DROP ======
     private void EmployeeList_MouseDown(object? sender, MouseEventArgs e)
     {
-        if (_lbEmployees.SelectedItem is Employee emp && e.Button == MouseButtons.Left)
-            _lbEmployees.DoDragDrop(emp, DragDropEffects.Move);
+        var idx = _lbEmployees.IndexFromPoint(e.Location);
+        if (idx < 0 || idx >= _lbEmployees.Items.Count) return;
+        var bounds = _lbEmployees.GetItemRectangle(idx);
+        if (GetEmployeeXRect(bounds).Contains(e.Location))
+        {
+            if (_lbEmployees.Items[idx] is Employee emp)
+            {
+                if (MessageBox.Show($"Mitarbeiter {emp.FullName} löschen?", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    DeleteEmployee(emp);
+            }
+            return;
+        }
+        if (_lbEmployees.Items[idx] is Employee dragEmp && e.Button == MouseButtons.Left)
+        {
+            _lbEmployees.SelectedIndex = idx;
+            _lbEmployees.DoDragDrop(dragEmp, DragDropEffects.Move);
+        }
     }
 
     private void CreateTeamFromEmployee(Employee emp)

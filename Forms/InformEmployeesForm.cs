@@ -10,7 +10,7 @@ public class InformEmployeesForm : UserControl
     private readonly NotificationService _notify;
     private readonly ComboBox _cmbRange;
     private readonly DateTimePicker _dtpFrom, _dtpUntil;
-    private readonly CheckedListBox _clbSites, _clbTeams, _clbEmployees;
+    private readonly FlowLayoutPanel _flowSites, _flowTeams, _flowEmployees;
     private readonly TextBox _txtLog;
 
     public InformEmployeesForm(DatabaseService db, SettingsService settings)
@@ -50,24 +50,18 @@ public class InformEmployeesForm : UserControl
 
         // Sites
         tlp.Controls.Add(new Label { Text = "Baustellen:", Anchor = AnchorStyles.Top }, 0, 2);
-        _clbSites = new CheckedListBox { Dock = DockStyle.Fill, DisplayMember = "Name" };
-        foreach (var s in _db.GetAllSites().OrderBy(x => x.Name))
-            _clbSites.Items.Add(s, true);
-        tlp.Controls.Add(_clbSites, 1, 2);
+        _flowSites = MakeCheckGroup(_db.GetAllSites().OrderBy(x => x.Name).Select(s => (object)s), s => ((ConstructionSite)s).Name);
+        tlp.Controls.Add(_flowSites, 1, 2);
 
         // Teams
         tlp.Controls.Add(new Label { Text = "Teams:", Anchor = AnchorStyles.Top }, 0, 3);
-        _clbTeams = new CheckedListBox { Dock = DockStyle.Fill, DisplayMember = "Name" };
-        foreach (var t in _db.GetAllTeams().OrderBy(x => x.Name))
-            _clbTeams.Items.Add(t, true);
-        tlp.Controls.Add(_clbTeams, 1, 3);
+        _flowTeams = MakeCheckGroup(_db.GetAllTeams().OrderBy(x => x.Name).Select(t => (object)t), t => ((Team)t).Name);
+        tlp.Controls.Add(_flowTeams, 1, 3);
 
         // Employees
         tlp.Controls.Add(new Label { Text = "Mitarbeiter:", Anchor = AnchorStyles.Top }, 0, 4);
-        _clbEmployees = new CheckedListBox { Dock = DockStyle.Fill, DisplayMember = "FullName" };
-        foreach (var e in _db.GetAllEmployees().OrderBy(x => x.LastName))
-            _clbEmployees.Items.Add(e, true);
-        tlp.Controls.Add(_clbEmployees, 1, 4);
+        _flowEmployees = MakeCheckGroup(_db.GetAllEmployees().OrderBy(x => x.LastName).Select(e => (object)e), e => ((Employee)e).FullName);
+        tlp.Controls.Add(_flowEmployees, 1, 4);
 
         // Buttons
         var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
@@ -86,6 +80,22 @@ public class InformEmployeesForm : UserControl
         Controls.Add(tlp);
         UpdateRangeDates();
     }
+
+    private static FlowLayoutPanel MakeCheckGroup(IEnumerable<object> items, Func<object, string> textSelector)
+    {
+        var gb = new GroupBox { Dock = DockStyle.Fill, Padding = new Padding(6) };
+        var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, AutoScroll = true };
+        foreach (var item in items)
+        {
+            var cb = new CheckBox { Text = textSelector(item), AutoSize = true, Checked = true, Margin = new Padding(3, 2, 10, 2), Tag = item };
+            flow.Controls.Add(cb);
+        }
+        gb.Controls.Add(flow);
+        return flow;
+    }
+
+    private static IEnumerable<object> CheckedItems(FlowLayoutPanel flow) =>
+        flow.Controls.OfType<CheckBox>().Where(c => c.Checked).Select(c => c.Tag).OfType<object>();
 
     private void UpdateRangeDates()
     {
@@ -122,8 +132,8 @@ public class InformEmployeesForm : UserControl
     {
         var from = _dtpFrom.Value.Date;
         var until = _dtpUntil.Value.Date;
-        var sites = _clbSites.CheckedItems.Cast<ConstructionSite>().Select(s => s.Id).ToHashSet();
-        var teams = _clbTeams.CheckedItems.Cast<Team>().Select(t => t.Id).ToHashSet();
+        var sites = CheckedItems(_flowSites).Cast<ConstructionSite>().Select(s => s.Id).ToHashSet();
+        var teams = CheckedItems(_flowTeams).Cast<Team>().Select(t => t.Id).ToHashSet();
 
         var all = _db.GetAllAssignments(from, until);
         var filtered = all.Where(a =>
@@ -146,8 +156,9 @@ public class InformEmployeesForm : UserControl
         }
 
         // Explicitly selected employees
-        var allEmpsChecked = _clbEmployees.CheckedItems.Count == _clbEmployees.Items.Count;
-        var explicitEmps = _clbEmployees.CheckedItems.Cast<Employee>().Select(e => e.Id).ToHashSet();
+        var allEmps = _flowEmployees.Controls.OfType<CheckBox>().ToList();
+        var allEmpsChecked = allEmps.All(c => c.Checked);
+        var explicitEmps = CheckedItems(_flowEmployees).Cast<Employee>().Select(e => e.Id).ToHashSet();
         if (allEmpsChecked)
             empIds.UnionWith(explicitEmps);
         else

@@ -10,8 +10,9 @@ public class EmployeeForm : Form
     private readonly TextBox _txtFirst, _txtLast, _txtEmail;
     private readonly CheckBox _chkLicense;
     private readonly CheckBox _chkPaper;
-    private readonly CheckedListBox _clbCategories;
+    private readonly GroupBox _gbCategories;
     private readonly FlowLayoutPanel _vacFlow;
+    private readonly List<CheckBox> _catBoxes = new();
 
     public EmployeeForm(DatabaseService db, Employee? employee)
     {
@@ -19,7 +20,7 @@ public class EmployeeForm : Form
         _employee = employee;
         Text = employee == null ? "Neuer Mitarbeiter" : "Mitarbeiter bearbeiten";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(440, 380);
+        Size = new Size(460, 480);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -30,8 +31,8 @@ public class EmployeeForm : Form
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
 
         tlp.Controls.Add(new Label { Text = "Vorname:", Anchor = AnchorStyles.Left }, 0, 0);
         _txtFirst = new TextBox { Dock = DockStyle.Fill };
@@ -47,18 +48,25 @@ public class EmployeeForm : Form
 
         tlp.Controls.Add(new Label { Text = "Führerschein:", Anchor = AnchorStyles.Left }, 0, 3);
         _chkLicense = new CheckBox { Text = "Ja", AutoSize = true };
-        _chkLicense.CheckedChanged += (_, _) => _clbCategories.Enabled = _chkLicense.Checked;
+        _chkLicense.CheckedChanged += (_, _) => _gbCategories.Enabled = _chkLicense.Checked;
         tlp.Controls.Add(_chkLicense, 1, 3);
 
-        tlp.Controls.Add(new Label { Text = "Kategorien:", Anchor = AnchorStyles.Top }, 0, 4);
-        _clbCategories = new CheckedListBox { Dock = DockStyle.Fill, Enabled = false };
-        foreach (var cat in Employee.AllLicenseCategories)
-            _clbCategories.Items.Add(cat, false);
-        tlp.Controls.Add(_clbCategories, 1, 4);
-
-        tlp.Controls.Add(new Label { Text = "Papierdruck:", Anchor = AnchorStyles.Left }, 0, 5);
+        tlp.Controls.Add(new Label { Text = "Papierdruck:", Anchor = AnchorStyles.Left }, 0, 4);
         _chkPaper = new CheckBox { Text = "Einsatzplan als Papierausdruck senden", AutoSize = true };
-        tlp.Controls.Add(_chkPaper, 1, 5);
+        tlp.Controls.Add(_chkPaper, 1, 4);
+
+        // License categories as direct checkboxes inside a framed GroupBox
+        _gbCategories = new GroupBox { Text = "Führerscheinkategorien", Dock = DockStyle.Fill, Enabled = false, Padding = new Padding(8) };
+        var catFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, AutoScroll = true };
+        foreach (var cat in Employee.AllLicenseCategories)
+        {
+            var cb = new CheckBox { Text = cat, AutoSize = true, Margin = new Padding(4, 2, 12, 2) };
+            _catBoxes.Add(cb);
+            catFlow.Controls.Add(cb);
+        }
+        _gbCategories.Controls.Add(catFlow);
+        tlp.Controls.Add(_gbCategories, 0, 5);
+        tlp.SetColumnSpan(_gbCategories, 2);
 
         // Vacations for this employee
         var vacPanel = new Panel { Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, Padding = new Padding(6) };
@@ -83,12 +91,12 @@ public class EmployeeForm : Form
             _txtLast.Text = employee.LastName;
             _txtEmail.Text = employee.Email;
             _chkLicense.Checked = employee.HasDriversLicense;
-            _clbCategories.Enabled = employee.HasDriversLicense;
+            _gbCategories.Enabled = employee.HasDriversLicense;
             _chkPaper.Checked = employee.PaperPrint;
             foreach (var cat in employee.GetLicenseList())
             {
-                var idx = _clbCategories.Items.IndexOf(cat);
-                if (idx >= 0) _clbCategories.SetItemChecked(idx, true);
+                var cb = _catBoxes.FirstOrDefault(c => c.Text == cat);
+                if (cb != null) cb.Checked = true;
             }
         }
     }
@@ -141,7 +149,7 @@ public class EmployeeForm : Form
         emp.LastName = _txtLast.Text.Trim();
         emp.Email = _txtEmail.Text.Trim();
         emp.HasDriversLicense = _chkLicense.Checked;
-        emp.SetLicenseList(_clbCategories.CheckedItems.Cast<string>().ToArray());
+        emp.SetLicenseList(_catBoxes.Where(c => c.Checked).Select(c => c.Text).ToArray());
         emp.PaperPrint = _chkPaper.Checked;
         _db.SaveEmployee(emp);
     }
