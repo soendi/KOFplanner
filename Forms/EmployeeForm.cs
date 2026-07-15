@@ -7,7 +7,7 @@ public class EmployeeForm : Form
 {
     private readonly DatabaseService _db;
     private readonly Employee? _employee;
-    private readonly TextBox _txtFirst, _txtLast;
+    private readonly TextBox _txtFirst, _txtLast, _txtEmail;
     private readonly CheckBox _chkLicense;
     private readonly CheckedListBox _clbCategories;
 
@@ -17,12 +17,12 @@ public class EmployeeForm : Form
         _employee = employee;
         Text = employee == null ? "Neuer Mitarbeiter" : "Mitarbeiter bearbeiten";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(420, 340);
+        Size = new Size(440, 380);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
 
-        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(10), RowCount = 5 };
+        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(10), RowCount = 6 };
 
         tlp.Controls.Add(new Label { Text = "Vorname:", Anchor = AnchorStyles.Left }, 0, 0);
         _txtFirst = new TextBox { Dock = DockStyle.Fill };
@@ -32,23 +32,27 @@ public class EmployeeForm : Form
         _txtLast = new TextBox { Dock = DockStyle.Fill };
         tlp.Controls.Add(_txtLast, 1, 1);
 
-        tlp.Controls.Add(new Label { Text = "Führerschein:", Anchor = AnchorStyles.Left }, 0, 2);
+        tlp.Controls.Add(new Label { Text = "E-Mail:", Anchor = AnchorStyles.Left }, 0, 2);
+        _txtEmail = new TextBox { Dock = DockStyle.Fill };
+        tlp.Controls.Add(_txtEmail, 1, 2);
+
+        tlp.Controls.Add(new Label { Text = "Führerschein:", Anchor = AnchorStyles.Left }, 0, 3);
         _chkLicense = new CheckBox { Text = "Ja", AutoSize = true };
         _chkLicense.CheckedChanged += (_, _) => _clbCategories.Enabled = _chkLicense.Checked;
-        tlp.Controls.Add(_chkLicense, 1, 2);
+        tlp.Controls.Add(_chkLicense, 1, 3);
 
-        tlp.Controls.Add(new Label { Text = "Kategorien:", Anchor = AnchorStyles.Top }, 0, 3);
-        _clbCategories = new CheckedListBox { Dock = DockStyle.Fill, Enabled = false, Height = 120 };
+        tlp.Controls.Add(new Label { Text = "Kategorien:", Anchor = AnchorStyles.Top }, 0, 4);
+        _clbCategories = new CheckedListBox { Dock = DockStyle.Fill, Enabled = false, Height = 100 };
         foreach (var cat in Employee.AllLicenseCategories)
             _clbCategories.Items.Add(cat, false);
-        tlp.Controls.Add(_clbCategories, 1, 3);
+        tlp.Controls.Add(_clbCategories, 1, 4);
 
         var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.LeftToRight, Height = 40 };
         var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, Cursor = Cursors.Hand };
         btnOk.Click += (_, _) => Save();
         var btnCancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 80, FlatStyle = FlatStyle.Flat };
         btnPanel.Controls.AddRange(new Control[] { btnOk, btnCancel });
-        tlp.Controls.Add(btnPanel, 0, 4);
+        tlp.Controls.Add(btnPanel, 0, 5);
         tlp.SetColumnSpan(btnPanel, 2);
         Controls.Add(tlp);
 
@@ -56,6 +60,7 @@ public class EmployeeForm : Form
         {
             _txtFirst.Text = employee.FirstName;
             _txtLast.Text = employee.LastName;
+            _txtEmail.Text = employee.Email;
             _chkLicense.Checked = employee.HasDriversLicense;
             _clbCategories.Enabled = employee.HasDriversLicense;
             foreach (var cat in employee.GetLicenseList())
@@ -77,6 +82,7 @@ public class EmployeeForm : Form
         var emp = _employee ?? new Employee();
         emp.FirstName = _txtFirst.Text.Trim();
         emp.LastName = _txtLast.Text.Trim();
+        emp.Email = _txtEmail.Text.Trim();
         emp.HasDriversLicense = _chkLicense.Checked;
         emp.SetLicenseList(_clbCategories.CheckedItems.Cast<string>().ToArray());
         _db.SaveEmployee(emp);

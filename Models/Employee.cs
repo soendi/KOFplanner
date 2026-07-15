@@ -7,6 +7,7 @@ public class Employee
     public int Id { get; set; }
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
+    public string Email { get; set; } = "";
     public bool HasDriversLicense { get; set; }
     public string LicenseCategories { get; set; } = "";
 

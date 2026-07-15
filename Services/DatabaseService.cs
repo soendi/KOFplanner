@@ -93,6 +93,31 @@ public class DatabaseService
             ins.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (1)";
             ins.ExecuteNonQuery();
         }
+
+        RunMigrations(conn);
+    }
+
+    private void RunMigrations(SqliteConnection conn)
+    {
+        using var check = conn.CreateCommand();
+        check.CommandText = "SELECT Version FROM SchemaVersion ORDER BY Version DESC LIMIT 1";
+        var version = (long)check.ExecuteScalar()!;
+
+        if (version < 2)
+        {
+            using var c1 = conn.CreateCommand();
+            c1.CommandText = "ALTER TABLE Teams ADD COLUMN ColorArgb INTEGER NOT NULL DEFAULT 0";
+            c1.ExecuteNonQuery();
+            using var c2 = conn.CreateCommand();
+            c2.CommandText = "ALTER TABLE Employees ADD COLUMN Email TEXT DEFAULT ''";
+            c2.ExecuteNonQuery();
+            using var c3 = conn.CreateCommand();
+            c3.CommandText = "ALTER TABLE Teams ADD COLUMN PreferredVehicleId INTEGER";
+            c3.ExecuteNonQuery();
+            using var up = conn.CreateCommand();
+            up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (2)";
+            up.ExecuteNonQuery();
+        }
     }
 
     public SqliteConnection GetConnection()
@@ -117,7 +142,8 @@ public class DatabaseService
                 FirstName = r.GetString(1),
                 LastName = r.GetString(2),
                 HasDriversLicense = r.GetInt32(3) == 1,
-                LicenseCategories = r.IsDBNull(4) ? "" : r.GetString(4)
+                LicenseCategories = r.IsDBNull(4) ? "" : r.GetString(4),
+                Email = r.IsDBNull(5) ? "" : r.GetString(5)
             });
         return list;
     }
@@ -128,19 +154,21 @@ public class DatabaseService
         using var cmd = conn.CreateCommand();
         if (e.Id == 0)
         {
-            cmd.CommandText = "INSERT INTO Employees (FirstName, LastName, HasDriversLicense, VehicleCategory) VALUES (@fn, @ln, @dl, @vc); SELECT last_insert_rowid()";
+            cmd.CommandText = "INSERT INTO Employees (FirstName, LastName, Email, HasDriversLicense, VehicleCategory) VALUES (@fn, @ln, @em, @dl, @vc); SELECT last_insert_rowid()";
             cmd.Parameters.AddWithValue("@fn", e.FirstName);
             cmd.Parameters.AddWithValue("@ln", e.LastName);
+            cmd.Parameters.AddWithValue("@em", e.Email);
             cmd.Parameters.AddWithValue("@dl", e.HasDriversLicense ? 1 : 0);
             cmd.Parameters.AddWithValue("@vc", e.LicenseCategories);
             e.Id = (int)(long)cmd.ExecuteScalar()!;
         }
         else
         {
-            cmd.CommandText = "UPDATE Employees SET FirstName=@fn, LastName=@ln, HasDriversLicense=@dl, VehicleCategory=@vc WHERE Id=@id";
+            cmd.CommandText = "UPDATE Employees SET FirstName=@fn, LastName=@ln, Email=@em, HasDriversLicense=@dl, VehicleCategory=@vc WHERE Id=@id";
             cmd.Parameters.AddWithValue("@id", e.Id);
             cmd.Parameters.AddWithValue("@fn", e.FirstName);
             cmd.Parameters.AddWithValue("@ln", e.LastName);
+            cmd.Parameters.AddWithValue("@em", e.Email);
             cmd.Parameters.AddWithValue("@dl", e.HasDriversLicense ? 1 : 0);
             cmd.Parameters.AddWithValue("@vc", e.LicenseCategories);
             cmd.ExecuteNonQuery();
@@ -210,7 +238,7 @@ public class DatabaseService
         cmd.CommandText = "SELECT * FROM Teams ORDER BY Name";
         using var r = cmd.ExecuteReader();
         while (r.Read())
-            list.Add(new Team { Id = r.GetInt32(0), Name = r.GetString(1) });
+            list.Add(new Team { Id = r.GetInt32(0), Name = r.GetString(1), ColorArgb = r.IsDBNull(2) ? 0 : r.GetInt32(2), PreferredVehicleId = r.IsDBNull(3) ? null : r.GetInt32(3) });
 
         foreach (var t in list)
             t.Members = GetTeamMembers(t.Id);
@@ -226,7 +254,7 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@tid", teamId);
         using var r = cmd.ExecuteReader();
         while (r.Read())
-            list.Add(new Employee { Id = r.GetInt32(0), FirstName = r.GetString(1), LastName = r.GetString(2), HasDriversLicense = r.GetInt32(3) == 1, LicenseCategories = r.IsDBNull(4) ? "" : r.GetString(4) });
+            list.Add(new Employee { Id = r.GetInt32(0), FirstName = r.GetString(1), LastName = r.GetString(2), Email = r.IsDBNull(5) ? "" : r.GetString(5), HasDriversLicense = r.GetInt32(3) == 1, LicenseCategories = r.IsDBNull(4) ? "" : r.GetString(4) });
         return list;
     }
 
@@ -236,15 +264,19 @@ public class DatabaseService
         using var cmd = conn.CreateCommand();
         if (t.Id == 0)
         {
-            cmd.CommandText = "INSERT INTO Teams (Name) VALUES (@n); SELECT last_insert_rowid()";
+            cmd.CommandText = "INSERT INTO Teams (Name, ColorArgb, PreferredVehicleId) VALUES (@n, @c, @pv); SELECT last_insert_rowid()";
             cmd.Parameters.AddWithValue("@n", t.Name);
+            cmd.Parameters.AddWithValue("@c", t.ColorArgb);
+            cmd.Parameters.AddWithValue("@pv", (object?)t.PreferredVehicleId ?? DBNull.Value);
             t.Id = (int)(long)cmd.ExecuteScalar()!;
         }
         else
         {
-            cmd.CommandText = "UPDATE Teams SET Name=@n WHERE Id=@id";
+            cmd.CommandText = "UPDATE Teams SET Name=@n, ColorArgb=@c, PreferredVehicleId=@pv WHERE Id=@id";
             cmd.Parameters.AddWithValue("@id", t.Id);
             cmd.Parameters.AddWithValue("@n", t.Name);
+            cmd.Parameters.AddWithValue("@c", t.ColorArgb);
+            cmd.Parameters.AddWithValue("@pv", (object?)t.PreferredVehicleId ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
         SaveTeamMembers(t.Id, t.Members);

@@ -26,9 +26,10 @@ public class MainForm : Form
     private readonly Label _lblMonthYear;
 
     // Tab 2 controls (Employees & Teams)
-    private readonly ListBox _lbEmployees, _lbTeams;
-    private readonly Label _lblTeamMembers;
-    private readonly ComboBox _cmbTeamVehicle;
+    private readonly ListBox _lbEmployees;
+    private readonly FlowLayoutPanel _flowTeamCards;
+    private readonly Panel _pnlNewTeamDropZone;
+    private readonly FlowLayoutPanel _flpVehicleChips;
 
     // Tab 3 controls (Vehicles)
     private readonly ListBox _lbVehicles;
@@ -72,7 +73,7 @@ public class MainForm : Form
         dateiMenu.DropDownItems.Add("Beenden", null, (_, _) => Close());
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
         hilfeMenu!.DropDownItems.Add("Nach Updates suchen...", null, async (_, _) => await CheckUpdate());
-        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.1.3.0\nAuthor: Lukas Sonderegger", "Info"));
+        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.1.4.0\nAuthor: Lukas Sonderegger", "Info"));
         MainMenuStrip = menu;
         Controls.Add(menu);
 
@@ -118,51 +119,61 @@ public class MainForm : Form
         tabKalender.Controls.Add(nav);
         _tabControl.TabPages.Add(tabKalender);
 
-        // ========== TAB 2: MITARBEITER & TEAMS ==========
-        var tabMA = new TabPage("Mitarbeiter & Teams");
-        var t2Split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 350 };
+        // ========== TAB 2: MITARBEITER & TEAMS (Drag & Drop) ==========
+        var tabMA = new TabPage("Mitarbeiter && Teams");
+        var t2Split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 340, FixedPanel = FixedPanel.Panel1 };
 
-        // Left: Employees
+        // Left: Employee list (drag source)
         var empPanel = new Panel { Dock = DockStyle.Fill };
-        empPanel.Controls.Add(new Label { Text = "Mitarbeiter", Dock = DockStyle.Top, Font = new Font(Font.FontFamily, 10, FontStyle.Bold) });
+        empPanel.Controls.Add(new Label { Text = "Mitarbeiter (auf Teams ziehen)", Dock = DockStyle.Top, Height = 24, Font = new Font(Font.FontFamily, 10, FontStyle.Bold) });
         _lbEmployees = new ListBox { Dock = DockStyle.Fill, DisplayMember = "FullName" };
-        var empBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
+        _lbEmployees.MouseDown += EmployeeList_MouseDown;
+        var empBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 32, Padding = new Padding(2) };
         var btnEmpNew = new Button { Text = "Neu", Width = 75 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
-        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 90 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
-        var btnEmpDel = new Button { Text = "Löschen", Width = 80 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
+        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 100 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
+        var btnEmpDel = new Button { Text = "Löschen", Width = 85 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
         empBtns.Controls.AddRange(new Control[] { btnEmpNew, btnEmpEdit, btnEmpDel });
         empPanel.Controls.Add(_lbEmployees);
         empPanel.Controls.Add(empBtns);
         t2Split.Panel1.Controls.Add(empPanel);
 
-        // Right: Teams
-        var teamPanel = new Panel { Dock = DockStyle.Fill };
-        teamPanel.Controls.Add(new Label { Text = "Teams", Dock = DockStyle.Top, Font = new Font(Font.FontFamily, 10, FontStyle.Bold) });
-        _lbTeams = new ListBox { Dock = DockStyle.Fill, DisplayMember = "Name" };
-        _lblTeamMembers = new Label { Text = "", Dock = DockStyle.Bottom, Height = 50, AutoEllipsis = true, Padding = new Padding(3) };
-        _lbTeams.SelectedIndexChanged += (_, _) => UpdateTeamDetails();
-        var teamBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
-        var btnTeamNew = new Button { Text = "Neu", Width = 75 }; btnTeamNew.Click += (_, _) => EditTeam(null); StyleButton(btnTeamNew);
-        var btnTeamEdit = new Button { Text = "Bearbeiten", Width = 90 }; btnTeamEdit.Click += (_, _) => { if (_lbTeams.SelectedItem is Team t) EditTeam(t); }; StyleButton(btnTeamEdit);
-        var btnTeamDel = new Button { Text = "Löschen", Width = 80 }; btnTeamDel.Click += (_, _) => { if (_lbTeams.SelectedItem is Team t) DeleteTeam(t); }; StyleButton(btnTeamDel);
-        teamBtns.Controls.AddRange(new Control[] { btnTeamNew, btnTeamEdit, btnTeamDel });
+        // Right: team cards (scroll) + vehicle chips (bottom)
+        var teamScrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(2) };
+        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12, 12, 12, 4) };
 
-        // Vehicle assignment to team
-        var vehAssignPanel = new GroupBox { Text = "Fahrzeug zu Team", Dock = DockStyle.Bottom, Height = 50 };
-        var vehFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(5) };
-        vehFlow.Controls.Add(new Label { Text = "Fahrzeug:", AutoSize = true, Anchor = AnchorStyles.Left });
-        _cmbTeamVehicle = new ComboBox { Width = 200, DisplayMember = "ToString" };
-        vehFlow.Controls.Add(_cmbTeamVehicle);
-        var btnAssignVeh = new Button { Text = "Zuweisen", Width = 85 };
-        btnAssignVeh.Click += (_, _) => AssignVehicleToTeam(); StyleButton(btnAssignVeh);
-        vehFlow.Controls.Add(btnAssignVeh);
-        vehAssignPanel.Controls.Add(vehFlow);
+        _pnlNewTeamDropZone = new Panel
+        {
+            Height = 76, BackColor = Color.FromArgb(0xE8, 0xF5, 0xE9),
+            BorderStyle = BorderStyle.FixedSingle, AllowDrop = true, Margin = new Padding(0, 0, 0, 12),
+            Cursor = Cursors.Hand
+        };
+        _pnlNewTeamDropZone.Paint += (s, e) =>
+        {
+            using var f = new Font("Segoe UI", 11, FontStyle.Bold);
+            using var b = new SolidBrush(Color.FromArgb(0x2E, 0x7D, 0x32));
+            var txt = "+ Neues Team  (Mitarbeiter hierher ziehen)";
+            var sz = e.Graphics.MeasureString(txt, f);
+            e.Graphics.DrawString(txt, f, b, (_pnlNewTeamDropZone.Width - sz.Width) / 2, (_pnlNewTeamDropZone.Height - sz.Height) / 2);
+        };
+        _pnlNewTeamDropZone.DragEnter += (s, e) => { if (e.Data!.GetDataPresent(typeof(Employee))) { e.Effect = DragDropEffects.Move; _pnlNewTeamDropZone.BackColor = Color.FromArgb(0xD8, 0xF0, 0xDC); } };
+        _pnlNewTeamDropZone.DragLeave += (_, _) => _pnlNewTeamDropZone.BackColor = Color.FromArgb(0xE8, 0xF5, 0xE9);
+        _pnlNewTeamDropZone.DragDrop += (s, e) =>
+        {
+            _pnlNewTeamDropZone.BackColor = Color.FromArgb(0xE8, 0xF5, 0xE9);
+            if (e.Data!.GetData(typeof(Employee)) is Employee emp)
+                CreateTeamFromEmployee(emp);
+        };
+        _flowTeamCards.Controls.Add(_pnlNewTeamDropZone);
 
-        teamPanel.Controls.Add(_lbTeams);
-        teamPanel.Controls.Add(_lblTeamMembers);
-        teamPanel.Controls.Add(teamBtns);
-        teamPanel.Controls.Add(vehAssignPanel);
-        t2Split.Panel2.Controls.Add(teamPanel);
+        var vehPanel = new Panel { Dock = DockStyle.Bottom, Height = 84, BorderStyle = BorderStyle.Fixed3D, Padding = new Padding(6) };
+        vehPanel.Controls.Add(new Label { Text = "Fahrzeuge  (auf ein Team ziehen):", Dock = DockStyle.Top, Height = 18, ForeColor = SystemColors.GrayText });
+        _flpVehicleChips = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(2), AllowDrop = true };
+        vehPanel.Controls.Add(_flpVehicleChips);
+
+        teamScrollPanel.Controls.Add(_flowTeamCards);
+        teamScrollPanel.Resize += (_, _) => LayoutTeamCards();
+        t2Split.Panel2.Controls.Add(teamScrollPanel);
+        t2Split.Panel2.Controls.Add(vehPanel);
         tabMA.Controls.Add(t2Split);
         _tabControl.TabPages.Add(tabMA);
 
@@ -171,8 +182,8 @@ public class MainForm : Form
         _lbVehicles = new ListBox { Dock = DockStyle.Fill, DisplayMember = "ToString" };
         var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
         var btnVehNew = new Button { Text = "Neu", Width = 75 }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
-        var btnVehEdit = new Button { Text = "Bearbeiten", Width = 90 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); }; StyleButton(btnVehEdit);
-        var btnVehDel = new Button { Text = "Löschen", Width = 80 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); }; StyleButton(btnVehDel);
+        var btnVehEdit = new Button { Text = "Bearbeiten", Width = 100 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); }; StyleButton(btnVehEdit);
+        var btnVehDel = new Button { Text = "Löschen", Width = 85 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); }; StyleButton(btnVehDel);
         vehBtns.Controls.AddRange(new Control[] { btnVehNew, btnVehEdit, btnVehDel });
         tabVeh.Controls.Add(_lbVehicles);
         tabVeh.Controls.Add(vehBtns);
@@ -183,8 +194,8 @@ public class MainForm : Form
         _lbSites = new ListBox { Dock = DockStyle.Fill, DisplayMember = "DisplayText" };
         var siteBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
         var btnSiteNew = new Button { Text = "Neu", Width = 75 }; btnSiteNew.Click += (_, _) => EditSite(null); StyleButton(btnSiteNew);
-        var btnSiteEdit = new Button { Text = "Bearbeiten", Width = 90 }; btnSiteEdit.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) EditSite(s); }; StyleButton(btnSiteEdit);
-        var btnSiteDel = new Button { Text = "Löschen", Width = 80 }; btnSiteDel.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) DeleteSite(s); }; StyleButton(btnSiteDel);
+        var btnSiteEdit = new Button { Text = "Bearbeiten", Width = 100 }; btnSiteEdit.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) EditSite(s); }; StyleButton(btnSiteEdit);
+        var btnSiteDel = new Button { Text = "Löschen", Width = 85 }; btnSiteDel.Click += (_, _) => { if (_lbSites.SelectedItem is ConstructionSite s) DeleteSite(s); }; StyleButton(btnSiteDel);
         siteBtns.Controls.AddRange(new Control[] { btnSiteNew, btnSiteEdit, btnSiteDel });
         tabSite.Controls.Add(_lbSites);
         tabSite.Controls.Add(siteBtns);
@@ -202,6 +213,12 @@ public class MainForm : Form
         _calendarPanel?.Invalidate();
     }
 
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        LayoutTeamCards();
+    }
+
     // ====== REFRESH ======
     private void RefreshAllData()
     {
@@ -213,11 +230,67 @@ public class MainForm : Form
         _sickness = _db.GetAllSickness();
 
         _lbEmployees.DataSource = null; _lbEmployees.DataSource = _employees;
-        _lbTeams.DataSource = null; _lbTeams.DataSource = _teams;
         _lbVehicles.DataSource = null; _lbVehicles.DataSource = _vehicles;
-        UpdateTeamDetails();
-        _cmbTeamVehicle.DataSource = null; _cmbTeamVehicle.DataSource = _vehicles;
+        RefreshTeamView();
+        RefreshVehicleChips();
         _lbSites.DataSource = null; _lbSites.DataSource = _sites;
+    }
+
+    private void RefreshTeamView()
+    {
+        while (_flowTeamCards.Controls.Count > 1)
+            _flowTeamCards.Controls[1].Dispose();
+        foreach (var t in _teams)
+            _flowTeamCards.Controls.Add(CreateTeamCard(t));
+        LayoutTeamCards();
+    }
+
+    private void LayoutTeamCards()
+    {
+        if (_flowTeamCards.ClientSize.Width <= 0) return;
+        var w = _flowTeamCards.ClientSize.Width - _flowTeamCards.Padding.Horizontal;
+        _pnlNewTeamDropZone.Width = w;
+        foreach (Control c in _flowTeamCards.Controls)
+        {
+            if (c is not Panel card || card == _pnlNewTeamDropZone) continue;
+            card.Width = w;
+            foreach (Label l in card.Controls.OfType<Label>())
+            {
+                l.Left = 14;
+                l.Width = card.Width - 110;
+            }
+            var editBtn = card.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Bearb.");
+            var delBtn = card.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "X");
+            if (editBtn != null) { editBtn.Left = card.Width - 98; editBtn.Top = 6; }
+            if (delBtn != null) { delBtn.Left = card.Width - 48; delBtn.Top = 6; }
+        }
+    }
+
+    private void RefreshVehicleChips()
+    {
+        _flpVehicleChips.Controls.Clear();
+        foreach (var v in _vehicles)
+        {
+            var chip = new Label
+            {
+                Text = $"{v.VehicleNumber} ({v.LicensePlate})",
+                AutoSize = false,
+                Width = 160, Height = 28,
+                BackColor = Color.FromArgb(0xE3, 0xF2, 0xFD),
+                BorderStyle = BorderStyle.FixedSingle,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Cursor = Cursors.Hand,
+                Tag = v,
+                AllowDrop = true,
+                Margin = new Padding(2)
+            };
+            chip.MouseDown += (s, e) =>
+            {
+                if (s is Label lbl && lbl.Tag is Vehicle veh)
+                    lbl.DoDragDrop(veh, DragDropEffects.Move);
+            };
+            _flpVehicleChips.Controls.Add(chip);
+        }
     }
 
     private void RefreshCalendar()
@@ -225,18 +298,6 @@ public class MainForm : Form
         _lblMonthYear.Text = _currentMonth.ToString("MMMM yyyy");
         _monthAssignments = _db.GetMonthAssignments(_currentMonth);
         _calendarPanel.Invalidate();
-    }
-
-    private void UpdateTeamDetails()
-    {
-        if (_lbTeams.SelectedItem is Team t)
-        {
-            _lblTeamMembers.Text = "Mitglieder: " + t.MemberSummary;
-            var assigned = _vehicles.FirstOrDefault(v => _monthAssignments.Any(a => a.TeamId == t.Id && a.VehicleId == v.Id));
-            if (assigned != null)
-                _lblTeamMembers.Text += $"\nFahrzeug: {assigned.VehicleNumber} ({assigned.LicensePlate})";
-        }
-        else _lblTeamMembers.Text = "";
     }
 
     // ====== CALENDAR DRAWING ======
@@ -269,8 +330,12 @@ public class MainForm : Form
                 var x = _calendarOrigin.X + col * _calendarDayWidth;
                 var y = _calendarOrigin.Y + row * _calendarDayHeight;
                 var rect = new Rectangle(x, y, _calendarDayWidth, _calendarDayHeight);
-                g.DrawRectangle(Pens.LightGray, rect);
-                if (dayNum < 1 || dayNum > daysInMonth) continue;
+                if (dayNum < 1 || dayNum > daysInMonth)
+                {
+                    using var p = new Pen(Color.FromArgb(0xDD, 0xDD, 0xDD));
+                    g.DrawRectangle(p, rect);
+                    continue;
+                }
 
                 var date = new DateTime(_currentMonth.Year, _currentMonth.Month, dayNum);
                 var back = Color.White;
@@ -279,6 +344,8 @@ public class MainForm : Form
                 else if (col >= 5) back = Color.FromArgb(248, 248, 248);
                 using var bb = new SolidBrush(back);
                 g.FillRectangle(bb, rect);
+                using var p2 = new Pen(Color.FromArgb(0xBB, 0xBB, 0xBB));
+                g.DrawRectangle(p2, rect);
 
                 using var df = new Font(Font.FontFamily, 8);
                 using var db2 = new SolidBrush(date == today ? Color.Blue : SystemColors.WindowText);
@@ -435,49 +502,39 @@ public class MainForm : Form
         popup.Text = $"Aktion für {rangeStr}";
         popup.StartPosition = FormStartPosition.Manual;
         popup.Location = screenPos;
-        popup.Size = new Size(320, 380);
+        popup.Size = new Size(340, 360);
         popup.FormBorderStyle = FormBorderStyle.FixedToolWindow;
         popup.ShowInTaskbar = false;
         popup.Font = Font;
 
-        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(10), ColumnCount = 1, RowCount = 8 };
+        var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(15, 12, 15, 12), WrapContents = false };
 
-        tlp.Controls.Add(new Label { Text = $"Zeitraum: {rangeStr}", Font = new Font(Font, FontStyle.Bold), TextAlign = ContentAlignment.MiddleCenter, Height = 30 }, 0, 0);
+        flow.Controls.Add(new Label { Text = $"Zeitraum: {rangeStr}", Font = new Font(Font, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 0, 0, 8) });
+        flow.Controls.Add(new Label { Text = "Zuweisungen", ForeColor = SystemColors.GrayText, AutoSize = true, Margin = new Padding(0, 4, 0, 4) });
 
-        tlp.Controls.Add(new Label { Text = "--- Zuweisungen ---", TextAlign = ContentAlignment.MiddleCenter, Height = 20, ForeColor = SystemColors.GrayText }, 0, 1);
-
-        var btnSite = new Button { Text = "Baustelle zuweisen", Height = 36, Dock = DockStyle.Fill };
+        var btnSite = new Button { Text = "Baustelle zuweisen", Width = 290, Height = 38 };
         btnSite.Click += (_, _) => { popup.Close(); AssignSiteToRange(from, until); }; StyleButton(btnSite);
-        tlp.Controls.Add(btnSite, 0, 2);
+        flow.Controls.Add(btnSite);
 
-        var btnTeamAssign = new Button { Text = "Team zuweisen", Height = 36, Dock = DockStyle.Fill };
+        var btnTeamAssign = new Button { Text = "Team zuweisen", Width = 290, Height = 38 };
         btnTeamAssign.Click += (_, _) => { popup.Close(); AssignTeamToRange(from, until); }; StyleButton(btnTeamAssign);
-        tlp.Controls.Add(btnTeamAssign, 0, 3);
+        flow.Controls.Add(btnTeamAssign);
 
-        var btnEmpAssign = new Button { Text = "Mitarbeiter zuweisen", Height = 36, Dock = DockStyle.Fill };
+        var btnEmpAssign = new Button { Text = "Mitarbeiter zuweisen", Width = 290, Height = 38 };
         btnEmpAssign.Click += (_, _) => { popup.Close(); AssignEmployeeToRange(from, until); }; StyleButton(btnEmpAssign);
-        tlp.Controls.Add(btnEmpAssign, 0, 4);
+        flow.Controls.Add(btnEmpAssign);
 
-        tlp.Controls.Add(new Label { Text = "--- Abwesenheiten ---", TextAlign = ContentAlignment.MiddleCenter, Height = 20, ForeColor = SystemColors.GrayText }, 0, 5);
+        flow.Controls.Add(new Label { Text = "Abwesenheiten", ForeColor = SystemColors.GrayText, AutoSize = true, Margin = new Padding(0, 8, 0, 4) });
 
-        var btnVac = new Button { Text = "Urlaub eintragen", Height = 36, Dock = DockStyle.Fill };
+        var btnVac = new Button { Text = "Urlaub eintragen", Width = 290, Height = 38 };
         btnVac.Click += (_, _) => { popup.Close(); AddVacation(from, until); }; StyleButton(btnVac);
-        tlp.Controls.Add(btnVac, 0, 6);
+        flow.Controls.Add(btnVac);
 
-        var btnSick = new Button { Text = "Krankheit eintragen", Height = 36, Dock = DockStyle.Fill };
+        var btnSick = new Button { Text = "Krankheit eintragen", Width = 290, Height = 38 };
         btnSick.Click += (_, _) => { popup.Close(); AddSickness(from, until); }; StyleButton(btnSick);
-        tlp.Controls.Add(btnSick, 0, 7);
+        flow.Controls.Add(btnSick);
 
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-
-        popup.Controls.Add(tlp);
+        popup.Controls.Add(flow);
         popup.ShowDialog();
         _dragStartDate = _dragEndDate = null;
         _calendarPanel.Invalidate();
@@ -690,17 +747,168 @@ public class MainForm : Form
         { _db.DeleteVehicle(v.Id); RefreshAllData(); }
     }
 
-    private void AssignVehicleToTeam()
+    private void AssignVehicleToTeam(Team team, Vehicle veh)
     {
-        if (_lbTeams.SelectedItem is not Team team) { MessageBox.Show("Bitte zuerst Team auswählen."); return; }
-        if (_cmbTeamVehicle.SelectedItem is not Vehicle veh) { MessageBox.Show("Bitte Fahrzeug auswählen."); return; }
         var canDrive = team.Members.Any(m => m.HasDriversLicense && m.GetLicenseList().Contains(veh.RequiredLicense));
         if (!canDrive)
         {
             if (MessageBox.Show($"Kein Teammitglied kann {veh.RequiredLicense} fahren.\nTrotzdem zuweisen?", "Warnung",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         }
-        MessageBox.Show($"Fahrzeug {veh.VehicleNumber} dem Team {team.Name} zugewiesen.\n(Bitte im Kalender über Baustelle zuweisen buchen)");
+        team.PreferredVehicleId = veh.Id;
+        _db.SaveTeam(team);
+        MessageBox.Show($"Fahrzeug {veh.VehicleNumber} dem Team {team.Name} zugewiesen.");
+        RefreshTeamView();
+    }
+
+    // ====== TAB 2 DRAG & DROP ======
+    private void EmployeeList_MouseDown(object? sender, MouseEventArgs e)
+    {
+        if (_lbEmployees.SelectedItem is Employee emp && e.Button == MouseButtons.Left)
+            _lbEmployees.DoDragDrop(emp, DragDropEffects.Move);
+    }
+
+    private void CreateTeamFromEmployee(Employee emp)
+    {
+        var palette = new[]
+        {
+            Color.FromArgb(0x2E, 0x7D, 0x32), Color.FromArgb(0x1B, 0x5E, 0x20), Color.FromArgb(0x00, 0x96, 0x88),
+            Color.FromArgb(0x00, 0x7B, 0xC0), Color.FromArgb(0xD3, 0x2F, 0x2F), Color.FromArgb(0xE6, 0x5C, 0x00),
+            Color.FromArgb(0x6A, 0x1B, 0x9A), Color.FromArgb(0x00, 0x85, 0x3F), Color.FromArgb(0x55, 0x55, 0x55)
+        };
+        var selectedColor = palette[0];
+        using var f = new Form();
+        f.Text = "Neues Team";
+        f.Size = new Size(360, 240);
+        f.StartPosition = FormStartPosition.CenterParent;
+        f.FormBorderStyle = FormBorderStyle.FixedDialog;
+        f.MaximizeBox = false;
+        f.MinimizeBox = false;
+        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(12), RowCount = 4 };
+        tlp.Controls.Add(new Label { Text = "Teamname:", Anchor = AnchorStyles.Left }, 0, 0);
+        var txtName = new TextBox { Dock = DockStyle.Fill, Text = $"{emp.LastName}-Team" };
+        tlp.Controls.Add(txtName, 1, 0);
+        tlp.Controls.Add(new Label { Text = "Farbe:", Anchor = AnchorStyles.Left }, 0, 1);
+        var colorPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Height = 40, Padding = new Padding(0) };
+        Button? selBtn = null;
+        foreach (var col in palette)
+        {
+            var sw = new Button { Width = 30, Height = 30, BackColor = col, FlatStyle = FlatStyle.Flat, Margin = new Padding(2) };
+            sw.Click += (_, _) =>
+            {
+                selectedColor = col;
+                if (selBtn != null) selBtn.FlatAppearance.BorderSize = 0;
+                sw.FlatAppearance.BorderSize = 3;
+                sw.FlatAppearance.BorderColor = Color.Black;
+                selBtn = sw;
+            };
+            if (col == selectedColor) { sw.FlatAppearance.BorderSize = 3; sw.FlatAppearance.BorderColor = Color.Black; selBtn = sw; }
+            colorPanel.Controls.Add(sw);
+        }
+        tlp.Controls.Add(colorPanel, 1, 1);
+        var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 38 };
+        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80 };
+        StyleButton(btnOk);
+        var btnCancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 80 };
+        btnPanel.Controls.Add(btnOk); btnPanel.Controls.Add(btnCancel);
+        tlp.Controls.Add(btnPanel, 0, 3); tlp.SetColumnSpan(btnPanel, 2);
+        f.Controls.Add(tlp);
+        if (f.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(txtName.Text)) return;
+
+        var team = new Team { Name = txtName.Text.Trim(), ColorArgb = selectedColor.ToArgb() };
+        team.Members.Add(emp);
+        _db.SaveTeam(team);
+        RefreshAllData();
+    }
+
+    private Panel CreateTeamCard(Team team)
+    {
+        var prefVeh = team.PreferredVehicleId.HasValue ? _vehicles.FirstOrDefault(v => v.Id == team.PreferredVehicleId.Value) : null;
+        var card = new Panel
+        {
+            Height = 96,
+            BackColor = Color.FromArgb(0xF5, 0xF5, 0xF5),
+            BorderStyle = BorderStyle.FixedSingle,
+            AllowDrop = true,
+            Margin = new Padding(0, 0, 0, 6),
+            Tag = team
+        };
+
+        var colorBar = new Panel { Width = 6, Height = 96, BackColor = team.Color, Dock = DockStyle.Left };
+        card.Controls.Add(colorBar);
+
+        var lblName = new Label { Text = team.Name, AutoSize = false, Height = 22, Left = 14, Top = 6, Width = card.Width - 110, Font = new Font("Segoe UI", 10, FontStyle.Bold) };
+        card.Controls.Add(lblName);
+
+        var lblMembers = new Label { Text = team.MemberSummary, AutoSize = false, Height = 32, Left = 14, Top = 30, Width = card.Width - 110, Font = new Font("Segoe UI", 8), ForeColor = SystemColors.GrayText };
+        card.Controls.Add(lblMembers);
+
+        var lblVeh = new Label { Text = prefVeh != null ? $"Fahrzeug: {prefVeh.VehicleNumber}" : "", AutoSize = false, Height = 16, Left = 14, Top = 62, Width = card.Width - 110, Font = new Font("Segoe UI", 8), ForeColor = Color.FromArgb(0x1B, 0x5E, 0x20) };
+        card.Controls.Add(lblVeh);
+
+        var btnEdit = new Button { Text = "Bearb.", Width = 46, Height = 24, Left = card.Width - 98, Top = 6, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+        StyleButton(btnEdit);
+        btnEdit.Click += (_, _) => { EditTeam(team); };
+        card.Controls.Add(btnEdit);
+
+        var btnDel = new Button { Text = "X", Width = 46, Height = 24, Left = card.Width - 48, Top = 6, FlatStyle = FlatStyle.Flat, ForeColor = Color.Red, Cursor = Cursors.Hand };
+        btnDel.FlatStyle = FlatStyle.Flat;
+        btnDel.FlatAppearance.BorderColor = Color.FromArgb(0xCC, 0xCC, 0xCC);
+        btnDel.BackColor = Color.WhiteSmoke;
+        btnDel.Click += (_, _) => { DeleteTeam(team); };
+        card.Controls.Add(btnDel);
+
+        // Accept employee / vehicle drops
+        card.DragEnter += (s, e) => { if (e.Data!.GetDataPresent(typeof(Employee)) || e.Data!.GetDataPresent(typeof(Vehicle))) e.Effect = DragDropEffects.Move; };
+        card.DragDrop += (s, e) =>
+        {
+            if (e.Data!.GetData(typeof(Employee)) is Employee emp)
+            {
+                if (!team.Members.Any(m => m.Id == emp.Id))
+                {
+                    team.Members.Add(emp);
+                    _db.SaveTeam(team);
+                    RefreshAllData();
+                }
+            }
+            else if (e.Data!.GetData(typeof(Vehicle)) is Vehicle veh)
+            {
+                AssignVehicleToTeam(team, veh);
+            }
+        };
+
+        card.MouseClick += (s, e) =>
+        {
+            if (e.Button == MouseButtons.Right)
+                ShowTeamContextMenu(team, card.PointToScreen(e.Location));
+        };
+
+        return card;
+    }
+
+    private void ShowTeamContextMenu(Team team, Point screenPos)
+    {
+        var cm = new ContextMenuStrip();
+        foreach (var m in team.Members.ToList())
+        {
+            var item = cm.Items.Add($"Entfernen: {m.FullName}");
+            item.Click += (_, _) =>
+            {
+                team.Members.Remove(m);
+                _db.SaveTeam(team);
+                RefreshAllData();
+            };
+        }
+        if (team.Members.Count > 0)
+            cm.Items.Add(new ToolStripSeparator());
+        var clearVeh = cm.Items.Add("Fahrzeugzuweisung entfernen");
+        clearVeh.Click += (_, _) =>
+        {
+            team.PreferredVehicleId = null;
+            _db.SaveTeam(team);
+            RefreshTeamView();
+        };
+        cm.Show(screenPos);
     }
 
     // ====== VAC/SICK CONFLICT CHECK ======
@@ -797,3 +1005,4 @@ public class MainForm : Form
         RefreshAllData();
     }
 }
+
