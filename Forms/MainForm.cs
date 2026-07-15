@@ -1289,20 +1289,68 @@ public class MainForm : Form
     {
         var emp = SelectEmployee();
         if (emp == null) return;
-        _db.SaveVacation(new Vacation { EmployeeId = emp.Id, StartDate = from, EndDate = until });
-        MessageBox.Show($"Urlaub für {emp.FullName} von {from:dd.MM.yyyy} bis {until:dd.MM.yyyy} eingetragen.");
-        _vacations = _db.GetAllVacations();
-        CheckVacSickConflicts();
+        EnterAbsence(emp, from, until, "Urlaub", isVacation: true);
     }
 
     private void AddSickness(DateTime from, DateTime until)
     {
         var emp = SelectEmployee();
         if (emp == null) return;
-        _db.SaveSickness(new Sickness { EmployeeId = emp.Id, StartDate = from, EndDate = until });
-        MessageBox.Show($"Krankheit für {emp.FullName} von {from:dd.MM.yyyy} bis {until:dd.MM.yyyy} eingetragen.");
-        _sickness = _db.GetAllSickness();
-        CheckVacSickConflicts();
+        EnterAbsence(emp, from, until, "Krankheit", isVacation: false);
+    }
+
+    // Urlaub/Krankheit eintragen und vorher prüfen, ob der Mitarbeiter in diesem Zeitraum
+    // tatsächlich eingeteilt ist. Nur bei ÜBERSCHNEIDUNG nachfragen; sonst einfach eintragen.
+    private void EnterAbsence(Employee emp, DateTime from, DateTime until, string kind, bool isVacation)
+    {
+        var conflictDays = new List<DateTime>();
+        for (var d = from.Date; d <= until.Date; d = d.AddDays(1))
+            if (_db.IsEmployeeAssigned(emp.Id, d))
+                conflictDays.Add(d);
+
+        bool save = true;
+        if (conflictDays.Count > 0)
+        {
+            var daysTxt = string.Join("\n", conflictDays.OrderBy(d => d).Select(d => $"  • {d:ddd dd.MM.yyyy}"));
+            var msg = $"{emp.FullName} ist im Zeitraum {from:dd.MM.yyyy} – {until:dd.MM.yyyy} bereits eingeteilt:\n\n" +
+                      $"{daysTxt}\n\n" +
+                      $"Wie soll verfahren werden?\n" +
+                      $"Ja = {kind} NICHT eintragen\n" +
+                      $"Nein = {kind} eintragen und Mitarbeiter aus dem/den Team(s) entfernen";
+            var res = MessageBox.Show(msg, $"{kind} mit Terminkonflikt", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+            if (res == DialogResult.Yes) return;        // nicht eintragen
+            if (res == DialogResult.Cancel) return;      // abbrechen
+            // Nein -> eintragen und aus Teams entfernen
+        }
+
+        if (isVacation)
+        {
+            _db.SaveVacation(new Vacation { EmployeeId = emp.Id, StartDate = from, EndDate = until });
+            _vacations = _db.GetAllVacations();
+        }
+        else
+        {
+            _db.SaveSickness(new Sickness { EmployeeId = emp.Id, StartDate = from, EndDate = until });
+            _sickness = _db.GetAllSickness();
+        }
+
+        // Bei Konflikt: Mitarbeiter aus allen Teams entfernen (nur die Teams, in denen er ist).
+        if (conflictDays.Count > 0)
+        {
+            var affected = _teams.Where(t => t.Members.Any(m => m.Id == emp.Id)).ToList();
+            foreach (var team in affected)
+            {
+                team.Members.RemoveAll(m => m.Id == emp.Id);
+                _db.SaveTeam(team);
+            }
+            MessageBox.Show($"{kind} für {emp.FullName} eingetragen.\nMitarbeiter aus {affected.Count} Team(s) entfernt.", kind);
+        }
+        else
+        {
+            MessageBox.Show($"{kind} für {emp.FullName} von {from:dd.MM.yyyy} bis {until:dd.MM.yyyy} eingetragen.", kind);
+        }
+
+        RefreshAllData();
     }
 
     // ====== SELECTION HELPERS ======
@@ -1588,31 +1636,6 @@ public class MainForm : Form
     }
 
     // ====== VAC/SICK CONFLICT CHECK ======
-    private void CheckVacSickConflicts()
-    {
-        foreach (var team in _teams)
-        {
-            var removed = new List<Employee>();
-            foreach (var m in team.Members.ToList())
-            {
-                for (var d = DateTime.Today.AddDays(-30); d <= DateTime.Today.AddDays(30); d = d.AddDays(1))
-                {
-                    if (_db.IsEmployeeOnVacationOrSick(m.Id, d))
-                    {
-                        removed.Add(m);
-                        break;
-                    }
-                }
-            }
-            if (removed.Count > 0)
-            {
-                foreach (var r in removed) team.Members.Remove(r);
-                _db.SaveTeam(team);
-                MessageBox.Show($"{string.Join(", ", removed.Select(x => x.FullName))} aus Team {team.Name} entfernt (Urlaub/Krankheit).", "Auto-Entfernung");
-            }
-        }
-    }
-
     // ====== BACKUP ======
     private async Task DoBackup()
     {
