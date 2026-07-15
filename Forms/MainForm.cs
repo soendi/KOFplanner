@@ -59,7 +59,7 @@ public class MainForm : Form
         dateiMenu.DropDownItems.Add("Beenden", null, (_, _) => Close());
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
         hilfeMenu!.DropDownItems.Add("Nach Updates suchen...", null, async (_, _) => await CheckUpdate());
-        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.1.0.0\nAuthor: Lukas Sonderegger", "Info"));
+        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.1.1.0\nAuthor: Lukas Sonderegger", "Info"));
         MainMenuStrip = menu;
         Controls.Add(menu);
 
@@ -745,7 +745,7 @@ public class MainForm : Form
     private async Task CheckUpdate()
     {
         var v = await _update.CheckForUpdate();
-        if (v == null) MessageBox.Show("Aktuellste Version.", "Update");
+        if (v == null) MessageBox.Show("Kein Update verfügbar.\nVersion ist aktuell.", "Update");
         else if (await _update.DownloadAndInstall(v)) Application.Exit();
     }
 
