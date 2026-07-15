@@ -889,7 +889,7 @@ public class MainForm : Form
                     {
                         var emp = er.Employee ?? _employees.FirstOrDefault(e => e.Id == er.EmployeeId!.Value);
                         flow.Controls.Add(MakeDeletableLine(flow.Width - 20, $"Mitarbeiter: {emp?.FullName ?? "MA"}",
-                            () => DeleteEmployeeRow(er, day, f), "Mitarbeiter löschen"));
+                            () => DeleteEmployeeRow(captured, er, day, f), "Mitarbeiter löschen"));
                     }
                 }
             }
@@ -1160,16 +1160,125 @@ public class MainForm : Form
     }
 
     // Einzelnen Mitarbeiter aus dem Termin entfernen.
-    private void DeleteEmployeeRow(Assignment row, DateTime day, Form owner)
+    private static bool CanDrive(Employee? e, Vehicle? v)
+    {
+        if (e == null || v == null) return false;
+        if (string.IsNullOrEmpty(v.RequiredLicense)) return true; // kein Führerschein nötig
+        return e.HasDriversLicense && e.GetLicenseList().Contains(v.RequiredLicense);
+    }
+
+    private void DeleteEmployeeRow(AssignmentEntry entry, Assignment row, DateTime day, Form owner)
     {
         var emp = row.Employee ?? _employees.FirstOrDefault(e => e.Id == row.EmployeeId);
         var name = emp?.FullName ?? "Mitarbeiter";
-        var scopeTxt = row.Date.Date == day.Date ? day : row.Date;
+
         if (MessageBox.Show($"Mitarbeiter löschen?\n{name}\n{row.Date:dd.MM.yyyy}", "Mitarbeiter löschen",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
+        // Prüfen, ob danach im verknüpften Termin (selbe Baustelle/Team/Fahrzeug) noch
+        // jemand übrig ist, der den erforderlichen Führerschein für das Fahrzeug hat.
+        var vehicle = entry.VehicleId.HasValue ? _vehicles.FirstOrDefault(v => v.Id == entry.VehicleId.Value) : null;
+        bool needsDriverCheck = vehicle != null && !string.IsNullOrEmpty(vehicle.RequiredLicense);
+        if (needsDriverCheck)
+        {
+            var remainingEmployees = entry.Assignments
+                .Where(a => a.EmployeeId.HasValue && a.EmployeeId != row.EmployeeId)
+                .Select(a => a.Employee ?? _employees.FirstOrDefault(e => e.Id == a.EmployeeId!.Value))
+                .Where(e => e != null)
+                .Distinct()
+                .ToList();
+            var stillDrivable = remainingEmployees.Any(e => CanDrive(e, vehicle));
+
+            if (!stillDrivable)
+            {
+                var res = ShowNoDriverDialog(vehicle, entry, name);
+                switch (res)
+                {
+                    case DialogResult.Cancel:   // Nicht löschen
+                        return;
+                    case DialogResult.Abort:    // Ganzen Termin löschen
+                        foreach (var a in entry.Assignments)
+                            _db.DeleteAssignment(a.Id);
+                        RefreshAllData();
+                        owner.Close();
+                        return;
+                    case DialogResult.Retry:    // Anderes Fahrzeug wählen
+                        _db.DeleteAssignment(row.Id);
+                        ReplaceVehicleInEntry(entry, owner);
+                        return;
+                    // OK / sonst: nur diese Person löschen (wie gewählt)
+                    default:
+                        break;
+                }
+            }
+        }
+
         _db.DeleteAssignment(row.Id);
+        RefreshAllData();
+        owner.Close();
+    }
+
+    // Letzte befähigte Person wird gelöscht -> Auswahl anbieten.
+    private DialogResult ShowNoDriverDialog(Vehicle vehicle, AssignmentEntry entry, string name)
+    {
+        using var dlg = new Form();
+        dlg.Text = "Kein Fahrer mehr für Fahrzeug";
+        dlg.Size = new Size(480, 320);
+        dlg.StartPosition = FormStartPosition.CenterParent;
+        dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
+        dlg.MaximizeBox = dlg.MinimizeBox = false;
+        dlg.Font = Font;
+        dlg.Controls.Add(new Label
+        {
+            Text = $"{name} war die letzte Person mit Führerschein '{vehicle.RequiredLicense}'\n" +
+                   $"für Fahrzeug {vehicle.VehicleNumber} in diesem Termin.\n\nWie soll verfahren werden?",
+            Location = new Point(16, 16), AutoSize = true
+        });
+
+        var btnKeep = new Button { Text = "Nicht löschen", Location = new Point(16, 130), Width = 210, Height = 40 };
+        var btnDelete = new Button { Text = "Löschen", Location = new Point(244, 130), Width = 210, Height = 40 };
+        var btnReplace = new Button { Text = "Anderes Fahrzeug wählen", Location = new Point(16, 184), Width = 210, Height = 40 };
+        var btnWhole = new Button { Text = "Ganzen Termin löschen", Location = new Point(244, 184), Width = 210, Height = 40, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
+        StyleButton(btnKeep); StyleButton(btnDelete); StyleButton(btnReplace); StyleButton(btnWhole);
+
+        var result = DialogResult.Cancel;
+        btnKeep.Click += (_, _) => { result = DialogResult.Cancel; dlg.Close(); };
+        btnDelete.Click += (_, _) => { result = DialogResult.OK; dlg.Close(); };
+        btnReplace.Click += (_, _) => { result = DialogResult.Retry; dlg.Close(); };
+        btnWhole.Click += (_, _) => { result = DialogResult.Abort; dlg.Close(); };
+        dlg.Controls.AddRange(new Control[] { btnKeep, btnDelete, btnReplace, btnWhole });
+        dlg.ShowDialog();
+        return result;
+    }
+
+    // Weist dem verknüpften Termin ein anderes, freies Fahrzeug zu (kein Konflikt an den Tagen).
+    private void ReplaceVehicleInEntry(AssignmentEntry entry, Form owner)
+    {
+        var days = entry.Assignments.Select(a => a.Date.Date).Distinct().ToList();
+        var rows = entry.Assignments.ToList();
+        var candidates = _vehicles.Where(v => days.All(d => !_db.IsVehicleAssigned(v.Id, d, rows.Select(r => r.Id).ToList()))).ToList();
+        if (candidates.Count == 0)
+        {
+            MessageBox.Show("Kein freies Fahrzeug verfügbar – Termin bleibt ohne Fahrzeug.", "Fahrzeug", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            RefreshAllData();
+            owner.Close();
+            return;
+        }
+        using var f = new Form();
+        f.Text = "Ersatz-Fahrzeug wählen";
+        f.Size = new Size(420, 300);
+        f.StartPosition = FormStartPosition.CenterParent;
+        f.Font = Font;
+        var lb = new ListBox { Dock = DockStyle.Fill, DataSource = candidates, DisplayMember = "ToString" };
+        var btn = new Button { Text = "Übernehmen", Dock = DockStyle.Bottom };
+        StyleButton(btn);
+        Vehicle? sel = null;
+        btn.Click += (_, _) => { sel = lb.SelectedItem as Vehicle; f.Close(); };
+        f.Controls.Add(lb); f.Controls.Add(btn);
+        f.ShowDialog();
+        if (sel != null)
+            foreach (var r in rows) { r.VehicleId = sel.Id; _db.SaveAssignment(r); }
         RefreshAllData();
         owner.Close();
     }
