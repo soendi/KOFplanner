@@ -1,4 +1,4 @@
-name: Build & Release
+name: "Build & Release"
 
 on:
   push:
@@ -12,7 +12,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0"
@@ -20,29 +19,31 @@ jobs:
       - name: Publish
         run: dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o pub
 
-      - name: Install Inno Setup
+      - name: "Install Inno Setup"
+        shell: pwsh
         run: choco install innosetup --no-progress
 
-      - name: Compile installer
-        run: & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+      - name: "Compile installer"
+        shell: pwsh
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss'
 
-      - name: Read version
+      - name: "Read version"
         shell: pwsh
         run: |
           $v = (Get-Content version.json | ConvertFrom-Json).version
           echo "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Create tag
+      - name: "Create tag"
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git tag "v${{ env.VERSION }}"
           git push origin "v${{ env.VERSION }}"
 
-      - name: Create Release
+      - name: "Create Release"
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "v${{ env.VERSION }}" `
             "KOFplanner-Setup.exe" `
