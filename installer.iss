@@ -36,7 +36,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Desktopverknüpfung erstellen"; GroupDescription: "Zusätzliche Symbole:"; Flags: checkedonce
 
 [Files]
-Source: "pub\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "pub\*.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "pub\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Registry]
 Root: "HKCU"; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; Flags: uninsdeletekey

@@ -12,7 +12,7 @@ static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
-        var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kofplanner.db");
+        var dbDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KOFplanner");        Directory.CreateDirectory(dbDir);        var dbPath = Path.Combine(dbDir, "kofplanner.db");
         var db = new DatabaseService(dbPath);
         var backup = new BackupService(dbPath);
         var update = new UpdateService();
