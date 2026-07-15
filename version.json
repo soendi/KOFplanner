@@ -1,4 +1,4 @@
 {
-  "version": "1.1.6.0",
-  "notes": "Erste Veröffentlichung - KOFplanner Baustelleneinsatzplanung"
+  "version": "1.1.7.0",
+  "notes": "UI-Fixes: Buttons gleich hoch/zentriert, Tabs & Neues-Team-Bereich nicht mehr abgeschnitten, Update mit Bestätigung vor Installation"
 }
