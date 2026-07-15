@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>KOFplanner</AssemblyName>
+    <RootNamespace>KOFplanner</RootNamespace>
+    <Version>1.0.0.0</Version>
+    <Company>Lukas Sonderegger</Company>
+    <Authors>Lukas Sonderegger</Authors>
+    <Description>KOFplanner - Baustelleneinsatzplanung</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.68.0" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
+  </ItemGroup>
+
+</Project>
