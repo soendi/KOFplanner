@@ -21,6 +21,9 @@ static class Program
             var backup = new BackupService(dbPath);
             var update = new UpdateService();
 
+            using (var splash = new SplashForm())
+                splash.ShowDialog();
+
             Application.Run(new MainForm(db, backup, update));
         }
         catch (Exception ex)
