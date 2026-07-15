@@ -84,8 +84,12 @@ public class MainForm : Form
         MainMenuStrip = menu;
         Controls.Add(menu);
 
-        // 20px spacer so the tab strip starts lower
-        Controls.Add(new Panel { Dock = DockStyle.Top, Height = 20, BackColor = SystemColors.Control });
+        // TableLayoutPanel guarantees the 20px spacer and reserves the rest for the
+        // TabControl, so the tab strip always renders at its full ItemSize height.
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = SystemColors.Control }, 0, 0);
 
         // Main TabControl. Reserve exactly the tab-strip height so nothing is clipped.
         _tabControl = new TabControl { Dock = DockStyle.Fill, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(260, 42), Padding = new Point(0, 0) };
@@ -101,7 +105,8 @@ public class MainForm : Form
             TextRenderer.DrawText(e.Graphics, tab.TabPages[e.Index].Text, tab.Font, e.Bounds, fg, bg,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         };
-        Controls.Add(_tabControl);
+        layout.Controls.Add(_tabControl, 0, 1);
+        Controls.Add(layout);
 
         // ========== TAB 1: KALENDER ==========
         var tabKalender = new TabPage("Kalender");
@@ -484,20 +489,20 @@ public class MainForm : Form
                               .Select(a => a.Vehicle!).DistinctBy(v => v.Id)
                               .OrderBy(v => v.VehicleNumber).ToList();
             var vehicleText = vehicles.Count > 0 ? string.Join(", ", vehicles.Select(v => v.VehicleNumber)) : "–";
-            lines.Add(($"{site.Name} / {team.Name} / {vehicleText}", color, color, Color.White));
+            lines.Add(($"{site.Name} / {team.Name} / {vehicleText}{SpanSuffix(ta)}", color, color, Color.White));
         }
 
         foreach (var site in day.Select(a => a.Site).OfType<ConstructionSite>()
                      .Where(s => !connectedSiteIds.Contains(s.Id)).DistinctBy(s => s.Id).OrderBy(s => s.Name))
-            lines.Add((site.Name, Color.White, Color.Black, Color.Black));
+            lines.Add((site.Name + SpanSuffix(site.Id, null, null, null), Color.White, Color.Black, Color.Black));
 
         foreach (var v in day.Select(a => a.Vehicle).OfType<Vehicle>()
                       .Where(v => !connectedSiteIds.Contains(v.Id == 0 ? -1 : day.First(a => a.Vehicle != null && a.Vehicle.Id == v.Id).ConstructionSiteId))
                       .DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber))
-            lines.Add((v.VehicleNumber, Color.White, Color.Black, Color.Black));
+            lines.Add((v.VehicleNumber + SpanSuffix(null, null, v.Id, null), Color.White, Color.Black, Color.Black));
 
         foreach (var emp in day.Select(a => a.Employee).OfType<Employee>().DistinctBy(e => e.Id).OrderBy(e => e.FullName))
-            lines.Add(($"PN: {emp.FullName}", Color.White, Color.Black, Color.Black));
+            lines.Add(($"PN: {emp.FullName}{SpanSuffix(null, null, null, emp.Id)}", Color.White, Color.Black, Color.Black));
 
         // Vacation / Sickness (light gray bars)
         var grayFill = Color.FromArgb(0xEE, 0xEE, 0xEE);
@@ -505,12 +510,14 @@ public class MainForm : Form
         foreach (var vac in _vacations.Where(v => date >= v.StartDate.Date && date <= v.EndDate.Date))
         {
             var name = vac.Employee?.FullName ?? $"MA {vac.EmployeeId}";
-            lines.Add(($"Urlaub: {name}", grayFill, grayBorder, Color.Black));
+            var suffix = vac.StartDate.Date == vac.EndDate.Date ? "" : $" ({vac.StartDate:dd.MM.}–{vac.EndDate:dd.MM.})";
+            lines.Add(($"Urlaub: {name}{suffix}", grayFill, grayBorder, Color.Black));
         }
         foreach (var sic in _sickness.Where(s => date >= s.StartDate.Date && date <= s.EndDate.Date))
         {
             var name = sic.Employee?.FullName ?? $"MA {sic.EmployeeId}";
-            lines.Add(($"Krank: {name}", grayFill, grayBorder, Color.Black));
+            var suffix = sic.StartDate.Date == sic.EndDate.Date ? "" : $" ({sic.StartDate:dd.MM.}–{sic.EndDate:dd.MM.})";
+            lines.Add(($"Krank: {name}{suffix}", grayFill, grayBorder, Color.Black));
         }
 
         using var sf = new Font(Font.FontFamily, zoomed ? 9 : 7);
@@ -532,6 +539,25 @@ public class MainForm : Form
             g.DrawString(detail, sf, tb, lx + 2, ly + (zoomed ? 3 : 1));
             ly += lineH + 1;
         }
+    }
+
+    private string SpanSuffix(Assignment sample)
+    {
+        return SpanSuffix(sample.ConstructionSiteId, sample.TeamId, sample.VehicleId, sample.EmployeeId);
+    }
+
+    private string SpanSuffix(int? siteId, int? teamId, int? vehicleId, int? empId)
+    {
+        var matches = _monthAssignments.Where(a =>
+            a.ConstructionSiteId == (siteId ?? a.ConstructionSiteId) &&
+            a.TeamId == (teamId ?? a.TeamId) &&
+            a.VehicleId == (vehicleId ?? a.VehicleId) &&
+            a.EmployeeId == (empId ?? a.EmployeeId)).ToList();
+        if (matches.Count < 2) return "";
+        var min = matches.Min(a => a.Date.Date);
+        var max = matches.Max(a => a.Date.Date);
+        if (min == max) return "";
+        return $" ({min:dd.MM.}–{max:dd.MM.})";
     }
 
     private static string FitText(Graphics g, Font f, string text, int maxWidth, int maxChars)
@@ -746,45 +772,172 @@ public class MainForm : Form
     // ====== DAY OVERVIEW ======
     private void ShowDayOverview(DateTime day)
     {
-        var das = _monthAssignments.Where(a => a.Date == day).ToList();
-        var sites = das.Select(a => a.Site).OfType<ConstructionSite>().DistinctBy(s => s.Id).OrderBy(s => s.Name).ToList();
-        var teams = das.Select(a => a.Team).OfType<Team>().DistinctBy(t => t.Id).ToList();
-        var employees = das.Select(a => a.Employee).OfType<Employee>()
-            .Concat(teams.SelectMany(t => t.Members))
-            .DistinctBy(e => e.Id).OrderBy(e => e.FullName).ToList();
-        var vehicles = das.Select(a => a.Vehicle).OfType<Vehicle>()
-            .Concat(teams.Where(t => t.PreferredVehicleId.HasValue)
-                        .Select(t => _vehicles.FirstOrDefault(v => v.Id == t.PreferredVehicleId!.Value))
-                        .OfType<Vehicle>())
-            .DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber).ToList();
+        var das = _monthAssignments.Where(a => a.Date.Date == day.Date).ToList();
 
         using var f = new Form();
         f.Text = $"Übersicht {day:dd.MM.yyyy}";
-        f.Size = new Size(420, 540);
-        f.MinimumSize = new Size(360, 300);
+        f.Size = new Size(460, 560);
+        f.MinimumSize = new Size(380, 320);
         f.StartPosition = FormStartPosition.CenterParent;
         f.Font = Font;
 
+        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = f.Height - 60, IsSplitterFixed = true };
         var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(16) };
+        var bottom = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
+        var btnClose = new Button { Text = "Schliessen", Dock = DockStyle.Right, Width = 110, Height = 34 };
+        StyleButton(btnClose);
+        btnClose.Click += (_, _) => f.Close();
+        var btnDelete = new Button { Text = "Löschen", Dock = DockStyle.Left, Width = 110, Height = 34, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
+        StyleButton(btnDelete);
+        bottom.Controls.AddRange(new Control[] { btnDelete, btnClose });
 
-        void AddSection(string title, IEnumerable<string> items)
+        var entries = BuildDayEntries(das);
+
+        AssignmentEntry? selected = null;
+        var entryPanels = new List<(Panel panel, AssignmentEntry entry)>();
+
+        void SelectEntry(AssignmentEntry entry, Panel panel)
         {
-            flow.Controls.Add(new Label { Text = title, Font = new Font(Font, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 12, 0, 4) });
-            var list = items.ToList();
-            if (list.Count == 0)
-                flow.Controls.Add(new Label { Text = "– keine", ForeColor = SystemColors.GrayText, AutoSize = true, Margin = new Padding(0, 0, 0, 8) });
-            else
-                foreach (var it in list)
-                    flow.Controls.Add(new Label { Text = "• " + it, AutoSize = true, Margin = new Padding(2, 0, 0, 2) });
+            selected = entry;
+            foreach (var (p, _) in entryPanels)
+                p.BackColor = SystemColors.Window;
+            panel.BackColor = Color.FromArgb(0xC8, 0xE6, 0xC9);
         }
 
-        AddSection($"Baustellen ({sites.Count})", sites.Select(s => s.Name));
-        AddSection($"Teams ({teams.Count})", teams.Select(t => t.Name));
-        AddSection($"Mitarbeiter ({employees.Count})", employees.Select(e => e.FullName));
-        AddSection($"Fahrzeuge ({vehicles.Count})", vehicles.Select(v => v.VehicleNumber));
+        if (entries.Count == 0)
+        {
+            flow.Controls.Add(new Label { Text = "Keine Einträge an diesem Tag.", ForeColor = SystemColors.GrayText, AutoSize = true });
+        }
+        else
+        {
+            foreach (var entry in entries)
+            {
+                var span = entry.From == entry.To
+                    ? $"{entry.From:dd.MM.yyyy}"
+                    : $"{entry.From:dd.MM.yyyy} – {entry.To:dd.MM.yyyy}";
+                var text = entry.Label + "\n" + (entry.From == entry.To ? $"am {span}" : $"von {span}");
 
-        f.Controls.Add(flow);
+                var p = new Panel { Width = flow.Width - 40, Height = 46, Margin = new Padding(0, 0, 0, 8), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window, Cursor = Cursors.Hand };
+                var lbl = new Label { Text = text, Location = new Point(8, 6), AutoSize = false, Width = p.Width - 16, Height = p.Height - 12 };
+                p.Controls.Add(lbl);
+                p.Click += (_, _) => SelectEntry(entry, p);
+                lbl.Click += (_, _) => SelectEntry(entry, p);
+                flow.Controls.Add(p);
+                entryPanels.Add((p, entry));
+            }
+        }
+
+        btnDelete.Enabled = entries.Count > 0;
+        btnDelete.Click += (_, _) =>
+        {
+            if (selected == null) { MessageBox.Show("Bitte zuerst einen Eintrag auswählen.", "Löschen", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+            DeleteEntry(selected, day, f);
+        };
+
+        split.Panel1.Controls.Add(flow);
+        split.Panel2.Controls.Add(bottom);
+        f.Controls.Add(split);
         f.ShowDialog();
+    }
+
+    private sealed class AssignmentEntry
+    {
+        public int ConstructionSiteId { get; set; }
+        public int? TeamId { get; set; }
+        public int? VehicleId { get; set; }
+        public int? EmployeeId { get; set; }
+        public DateTime From { get; set; }
+        public DateTime To { get; set; }
+        public List<Assignment> Assignments { get; set; } = new();
+        public string Label { get; set; } = "";
+        public bool MultiDay => From != To;
+    }
+
+    private List<AssignmentEntry> BuildDayEntries(List<Assignment> day)
+    {
+        var groups = day.GroupBy(a => (a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId))
+                        .Select(g =>
+                        {
+                            var all = g.ToList();
+                            var dates = all.Select(a => a.Date.Date).Distinct().OrderBy(d => d).ToList();
+                            // Expanding contiguous runs yields overall min/max as the entry span
+                            var min = dates.Min();
+                            var max = dates.Max();
+                            var a0 = all.First();
+                            var site = a0.Site ?? _sites.FirstOrDefault(s => s.Id == a0.ConstructionSiteId);
+                            var team = a0.Team ?? (a0.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == a0.TeamId.Value) : null);
+                            var vehicle = a0.Vehicle ?? (a0.VehicleId.HasValue ? _vehicles.FirstOrDefault(v => v.Id == a0.VehicleId.Value) : null);
+                            var emp = a0.Employee ?? (a0.EmployeeId.HasValue ? _employees.FirstOrDefault(e => e.Id == a0.EmployeeId.Value) : null);
+
+                            var parts = new List<string>();
+                            if (site != null) parts.Add(site.Name);
+                            if (team != null) parts.Add(team.Name);
+                            if (vehicle != null) parts.Add(vehicle.VehicleNumber);
+                            if (emp != null) parts.Add(emp.FullName);
+                            var label = parts.Count > 0 ? string.Join(" / ", parts) : "Eintrag";
+
+                            return new AssignmentEntry
+                            {
+                                ConstructionSiteId = a0.ConstructionSiteId,
+                                TeamId = a0.TeamId,
+                                VehicleId = a0.VehicleId,
+                                EmployeeId = a0.EmployeeId,
+                                From = min,
+                                To = max,
+                                Assignments = all,
+                                Label = label
+                            };
+                        })
+                        .OrderBy(e => e.Label)
+                        .ToList();
+        return groups;
+    }
+
+    private void DeleteEntry(AssignmentEntry entry, DateTime day, Form owner)
+    {
+        if (entry.MultiDay)
+        {
+            using var dlg = new Form();
+            dlg.Text = "Löschen – Mehrfachzuweisung";
+            dlg.Size = new Size(420, 230);
+            dlg.StartPosition = FormStartPosition.CenterParent;
+            dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
+            dlg.MaximizeBox = dlg.MinimizeBox = false;
+            dlg.Font = Font;
+            dlg.Controls.Add(new Label { Text = $"{entry.Label}\n{entry.From:dd.MM.yyyy} – {entry.To:dd.MM.yyyy}", Location = new Point(16, 16), AutoSize = true });
+            dlg.Controls.Add(new Label { Text = "Wie soll gelöscht werden?", Location = new Point(16, 56), AutoSize = true });
+            var btnWhole = new Button { Text = "Ganzer Termin", Location = new Point(16, 110), Width = 170, Height = 38, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
+            StyleButton(btnWhole);
+            var btnDay = new Button { Text = "Nur an diesem Tag", Location = new Point(206, 110), Width = 180, Height = 38 };
+            StyleButton(btnDay);
+            var result = 0;
+            btnWhole.Click += (_, _) => { result = 1; dlg.Close(); };
+            btnDay.Click += (_, _) => { result = 2; dlg.Close(); };
+            dlg.Controls.AddRange(new Control[] { btnWhole, btnDay });
+            dlg.ShowDialog(owner);
+
+            if (result == 1)
+            {
+                foreach (var a in entry.Assignments)
+                    _db.DeleteAssignment(a.Id);
+            }
+            else if (result == 2)
+            {
+                foreach (var a in entry.Assignments.Where(a => a.Date.Date == day.Date))
+                    _db.DeleteAssignment(a.Id);
+            }
+            else return;
+        }
+        else
+        {
+            if (MessageBox.Show($"Eintrag löschen?\n{entry.Label}\n{entry.From:dd.MM.yyyy}", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+            foreach (var a in entry.Assignments)
+                _db.DeleteAssignment(a.Id);
+        }
+
+        RefreshCalendar();
+        owner.Close();
     }
 
     // ====== RANGE ACTIONS ======
