@@ -21,7 +21,7 @@ public class UpdateService
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             var json = await http.GetStringAsync(VersionUrl);
-            var info = JsonSerializer.Deserialize<UpdateInfo>(json);
+            var info = JsonSerializer.Deserialize<UpdateInfo>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (info?.Version == null) return null;
             var remote = new Version(info.Version);
             return remote > CurrentVersion ? remote : null;
