@@ -25,14 +25,11 @@ public class MainForm : Form
     private readonly Panel _calendarPanel;
     private readonly Label _lblMonthYear;
 
-    // Tab 2 controls (Employees & Teams)
-    private readonly ListBox _lbEmployees;
-    private readonly FlowLayoutPanel _flowTeamCards;
-    private readonly Panel _pnlNewTeamDropZone;
-    private readonly FlowLayoutPanel _flpVehicleChips;
-
-    // Tab 3 controls (Vehicles)
-    private readonly ListBox _lbVehicles;
+        // Tab 2 controls (Employees, Teams, Vehicles)
+        private readonly ListBox _lbEmployees;
+        private readonly FlowLayoutPanel _flowTeamCards;
+        private readonly Panel _pnlNewTeamDropZone;
+        private readonly ListBox _lbVehicles;
 
     // Tab 4 controls (Sites)
     private readonly ListBox _lbSites;
@@ -73,7 +70,7 @@ public class MainForm : Form
         dateiMenu.DropDownItems.Add("Beenden", null, (_, _) => Close());
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
         hilfeMenu!.DropDownItems.Add("Nach Updates suchen...", null, async (_, _) => await CheckUpdate());
-        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show("KOFplanner v1.1.4.0\nAuthor: Lukas Sonderegger", "Info"));
+        hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show($"KOFplanner v{_update.CurrentVersion}\nAuthor: Lukas Sonderegger", "Info"));
         MainMenuStrip = menu;
         Controls.Add(menu);
 
@@ -119,28 +116,35 @@ public class MainForm : Form
         tabKalender.Controls.Add(nav);
         _tabControl.TabPages.Add(tabKalender);
 
-        // ========== TAB 2: MITARBEITER & TEAMS (Drag & Drop) ==========
+        // ========== TAB 2: MITARBEITER & TEAMS (3 Spalten) ==========
         var tabMA = new TabPage("Mitarbeiter && Teams");
-        var t2Split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 340, FixedPanel = FixedPanel.Panel1 };
+        var t2Grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(6) };
+        t2Grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+        t2Grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+        t2Grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+        t2Grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-        // Left: Employee list (drag source)
-        var empPanel = new Panel { Dock = DockStyle.Fill };
-        empPanel.Controls.Add(new Label { Text = "Mitarbeiter (auf Teams ziehen)", Dock = DockStyle.Top, Height = 24, Font = new Font(Font.FontFamily, 10, FontStyle.Bold) });
-        _lbEmployees = new ListBox { Dock = DockStyle.Fill, DisplayMember = "FullName" };
+        // ---- Spalte 1: Mitarbeiter ----
+        var colEmp = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 4, 0) };
+        var empHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
+        empHeader.Controls.Add(new Label { Text = "Mitarbeiter", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
+        var btnEmpNew = new Button { Text = "NEU", Width = 90, Height = 28, Dock = DockStyle.Right }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
+        empHeader.Controls.Add(btnEmpNew);
+        _lbEmployees = new ListBox { Dock = DockStyle.Fill, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 40 };
+        _lbEmployees.DrawItem += EmployeeList_DrawItem;
         _lbEmployees.MouseDown += EmployeeList_MouseDown;
-        var empBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 32, Padding = new Padding(2) };
-        var btnEmpNew = new Button { Text = "Neu", Width = 75 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
-        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 100 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
-        var btnEmpDel = new Button { Text = "Löschen", Width = 85 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
-        empBtns.Controls.AddRange(new Control[] { btnEmpNew, btnEmpEdit, btnEmpDel });
-        empPanel.Controls.Add(_lbEmployees);
-        empPanel.Controls.Add(empBtns);
-        t2Split.Panel1.Controls.Add(empPanel);
+        colEmp.Controls.Add(_lbEmployees);
+        colEmp.Controls.Add(empHeader);
+        t2Grid.Controls.Add(colEmp, 0, 0);
 
-        // Right: team cards (scroll) + vehicle chips (bottom)
-        var teamScrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(2) };
-        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12, 12, 12, 4) };
-
+        // ---- Spalte 2: Teams ----
+        var colTeam = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 0, 4, 0) };
+        var teamHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
+        teamHeader.Controls.Add(new Label { Text = "Teams", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
+        colTeam.Controls.Add(teamHeader);
+        var teamScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(2) };
+        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 0, 0, 4) };
+        _flowTeamCards.Resize += (_, _) => LayoutTeamCards();
         _pnlNewTeamDropZone = new Panel
         {
             Height = 76, BackColor = Color.FromArgb(0xE8, 0xF5, 0xE9),
@@ -164,30 +168,29 @@ public class MainForm : Form
                 CreateTeamFromEmployee(emp);
         };
         _flowTeamCards.Controls.Add(_pnlNewTeamDropZone);
+        teamScroll.Controls.Add(_flowTeamCards);
+        colTeam.Controls.Add(teamScroll);
+        t2Grid.Controls.Add(colTeam, 1, 0);
 
-        var vehPanel = new Panel { Dock = DockStyle.Bottom, Height = 84, BorderStyle = BorderStyle.Fixed3D, Padding = new Padding(6) };
-        vehPanel.Controls.Add(new Label { Text = "Fahrzeuge  (auf ein Team ziehen):", Dock = DockStyle.Top, Height = 18, ForeColor = SystemColors.GrayText });
-        _flpVehicleChips = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(2), AllowDrop = true };
-        vehPanel.Controls.Add(_flpVehicleChips);
-
-        teamScrollPanel.Controls.Add(_flowTeamCards);
-        teamScrollPanel.Resize += (_, _) => LayoutTeamCards();
-        t2Split.Panel2.Controls.Add(teamScrollPanel);
-        t2Split.Panel2.Controls.Add(vehPanel);
-        tabMA.Controls.Add(t2Split);
-        _tabControl.TabPages.Add(tabMA);
-
-        // ========== TAB 3: FAHRZEUGE ==========
-        var tabVeh = new TabPage("Fahrzeuge");
-        _lbVehicles = new ListBox { Dock = DockStyle.Fill, DisplayMember = "ToString" };
-        var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
-        var btnVehNew = new Button { Text = "Neu", Width = 75 }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
+        // ---- Spalte 3: Fahrzeuge ----
+        var colVeh = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 0, 0, 0) };
+        var vehHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
+        vehHeader.Controls.Add(new Label { Text = "Fahrzeuge", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
+        var btnVehNew = new Button { Text = "NEU", Width = 90, Height = 28, Dock = DockStyle.Right }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
+        vehHeader.Controls.Add(btnVehNew);
+        var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 32, Padding = new Padding(2) };
         var btnVehEdit = new Button { Text = "Bearbeiten", Width = 100 }; btnVehEdit.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) EditVehicle(v); }; StyleButton(btnVehEdit);
         var btnVehDel = new Button { Text = "Löschen", Width = 85 }; btnVehDel.Click += (_, _) => { if (_lbVehicles.SelectedItem is Vehicle v) DeleteVehicle(v); }; StyleButton(btnVehDel);
-        vehBtns.Controls.AddRange(new Control[] { btnVehNew, btnVehEdit, btnVehDel });
-        tabVeh.Controls.Add(_lbVehicles);
-        tabVeh.Controls.Add(vehBtns);
-        _tabControl.TabPages.Add(tabVeh);
+        vehBtns.Controls.AddRange(new Control[] { btnVehEdit, btnVehDel });
+        _lbVehicles = new ListBox { Dock = DockStyle.Fill, DisplayMember = "ToString" };
+        _lbVehicles.MouseDown += VehicleList_MouseDown;
+        colVeh.Controls.Add(_lbVehicles);
+        colVeh.Controls.Add(vehBtns);
+        colVeh.Controls.Add(vehHeader);
+        t2Grid.Controls.Add(colVeh, 2, 0);
+
+        tabMA.Controls.Add(t2Grid);
+        _tabControl.TabPages.Add(tabMA);
 
         // ========== TAB 4: BAUSTELLEN ==========
         var tabSite = new TabPage("Baustellen");
@@ -222,9 +225,9 @@ public class MainForm : Form
     // ====== REFRESH ======
     private void RefreshAllData()
     {
-        _employees = _db.GetAllEmployees();
+        _employees = _db.GetAllEmployees().OrderBy(e => e.FullName, StringComparer.CurrentCultureIgnoreCase).ToList();
         _teams = _db.GetAllTeams();
-        _vehicles = _db.GetAllVehicles();
+        _vehicles = _db.GetAllVehicles().OrderBy(v => v.VehicleNumber, StringComparer.CurrentCultureIgnoreCase).ToList();
         _sites = _db.GetAllSites();
         _vacations = _db.GetAllVacations();
         _sickness = _db.GetAllSickness();
@@ -232,7 +235,6 @@ public class MainForm : Form
         _lbEmployees.DataSource = null; _lbEmployees.DataSource = _employees;
         _lbVehicles.DataSource = null; _lbVehicles.DataSource = _vehicles;
         RefreshTeamView();
-        RefreshVehicleChips();
         _lbSites.DataSource = null; _lbSites.DataSource = _sites;
     }
 
@@ -256,8 +258,8 @@ public class MainForm : Form
             card.Width = w;
             foreach (Label l in card.Controls.OfType<Label>())
             {
-                l.Left = 14;
-                l.Width = card.Width - 110;
+                l.Left = 12;
+                l.Width = (l.Top == 8) ? card.Width - 110 : card.Width - 24;
             }
             var editBtn = card.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "Bearb.");
             var delBtn = card.Controls.OfType<Button>().FirstOrDefault(b => b.Text == "X");
@@ -266,31 +268,35 @@ public class MainForm : Form
         }
     }
 
-    private void RefreshVehicleChips()
+    private void VehicleList_MouseDown(object? sender, MouseEventArgs e)
     {
-        _flpVehicleChips.Controls.Clear();
-        foreach (var v in _vehicles)
-        {
-            var chip = new Label
-            {
-                Text = $"{v.VehicleNumber} ({v.LicensePlate})",
-                AutoSize = false,
-                Width = 160, Height = 28,
-                BackColor = Color.FromArgb(0xE3, 0xF2, 0xFD),
-                BorderStyle = BorderStyle.FixedSingle,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Cursor = Cursors.Hand,
-                Tag = v,
-                AllowDrop = true,
-                Margin = new Padding(2)
-            };
-            chip.MouseDown += (s, e) =>
-            {
-                if (s is Label lbl && lbl.Tag is Vehicle veh)
-                    lbl.DoDragDrop(veh, DragDropEffects.Move);
-            };
-            _flpVehicleChips.Controls.Add(chip);
-        }
+        if (_lbVehicles.SelectedItem is Vehicle veh && e.Button == MouseButtons.Left)
+            _lbVehicles.DoDragDrop(veh, DragDropEffects.Move);
+    }
+
+    private static Color GetContrastText(Color bg)
+    {
+        var lum = (0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B) / 255.0;
+        return lum > 0.6 ? Color.Black : Color.White;
+    }
+
+    private void EmployeeList_DrawItem(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is not ListBox lb) return;
+        e.DrawBackground();
+        if (e.Index < 0 || e.Index >= lb.Items.Count) return;
+        if (lb.Items[e.Index] is not Employee emp) return;
+        var name = emp.FullName;
+        var lic = emp.GetLicenseList().Length > 0
+            ? "FS: " + string.Join(", ", emp.GetLicenseList())
+            : "kein Führerschein";
+        using var nameFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+        using var licFont = new Font("Segoe UI", 8f);
+        using var nameBrush = new SolidBrush(e.ForeColor);
+        using var licBrush = new SolidBrush(Color.FromArgb(0x66, 0x66, 0x66));
+        e.Graphics.DrawString(name, nameFont, nameBrush, e.Bounds.Left + 5, e.Bounds.Top + 4);
+        e.Graphics.DrawString(lic, licFont, licBrush, e.Bounds.Left + 5, e.Bounds.Top + 22);
+        e.DrawFocusRectangle();
     }
 
     private void RefreshCalendar()
@@ -824,37 +830,34 @@ public class MainForm : Form
     private Panel CreateTeamCard(Team team)
     {
         var prefVeh = team.PreferredVehicleId.HasValue ? _vehicles.FirstOrDefault(v => v.Id == team.PreferredVehicleId.Value) : null;
+        var bg = team.Color;
+        var fg = GetContrastText(bg);
         var card = new Panel
         {
-            Height = 96,
-            BackColor = Color.FromArgb(0xF5, 0xF5, 0xF5),
+            Height = 104,
+            BackColor = bg,
             BorderStyle = BorderStyle.FixedSingle,
             AllowDrop = true,
-            Margin = new Padding(0, 0, 0, 6),
+            Margin = new Padding(0, 0, 0, 8),
             Tag = team
         };
 
-        var colorBar = new Panel { Width = 6, Height = 96, BackColor = team.Color, Dock = DockStyle.Left };
-        card.Controls.Add(colorBar);
-
-        var lblName = new Label { Text = team.Name, AutoSize = false, Height = 22, Left = 14, Top = 6, Width = card.Width - 110, Font = new Font("Segoe UI", 10, FontStyle.Bold) };
+        var lblName = new Label { Text = team.Name, AutoSize = false, Height = 22, Left = 12, Top = 8, Width = card.Width - 110, Font = new Font("Segoe UI", 10, FontStyle.Bold), ForeColor = fg };
         card.Controls.Add(lblName);
 
-        var lblMembers = new Label { Text = team.MemberSummary, AutoSize = false, Height = 32, Left = 14, Top = 30, Width = card.Width - 110, Font = new Font("Segoe UI", 8), ForeColor = SystemColors.GrayText };
+        var lblMembers = new Label { Text = team.MemberSummary, AutoSize = false, Height = 38, Left = 12, Top = 32, Width = card.Width - 24, Font = new Font("Segoe UI", 8), ForeColor = fg };
         card.Controls.Add(lblMembers);
 
-        var lblVeh = new Label { Text = prefVeh != null ? $"Fahrzeug: {prefVeh.VehicleNumber}" : "", AutoSize = false, Height = 16, Left = 14, Top = 62, Width = card.Width - 110, Font = new Font("Segoe UI", 8), ForeColor = Color.FromArgb(0x1B, 0x5E, 0x20) };
+        var lblVeh = new Label { Text = prefVeh != null ? $"Fahrzeug: {prefVeh.VehicleNumber}" : "kein Fahrzeug", AutoSize = false, Height = 16, Left = 12, Top = 72, Width = card.Width - 24, Font = new Font("Segoe UI", 8, FontStyle.Italic), ForeColor = fg };
         card.Controls.Add(lblVeh);
 
-        var btnEdit = new Button { Text = "Bearb.", Width = 46, Height = 24, Left = card.Width - 98, Top = 6, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
-        StyleButton(btnEdit);
+        var btnEdit = new Button { Text = "Bearb.", Width = 46, Height = 24, Left = card.Width - 98, Top = 8, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.FromArgb(0x1B, 0x5E, 0x20) };
+        btnEdit.FlatStyle = FlatStyle.Flat;
         btnEdit.Click += (_, _) => { EditTeam(team); };
         card.Controls.Add(btnEdit);
 
-        var btnDel = new Button { Text = "X", Width = 46, Height = 24, Left = card.Width - 48, Top = 6, FlatStyle = FlatStyle.Flat, ForeColor = Color.Red, Cursor = Cursors.Hand };
+        var btnDel = new Button { Text = "X", Width = 46, Height = 24, Left = card.Width - 48, Top = 8, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.Red };
         btnDel.FlatStyle = FlatStyle.Flat;
-        btnDel.FlatAppearance.BorderColor = Color.FromArgb(0xCC, 0xCC, 0xCC);
-        btnDel.BackColor = Color.WhiteSmoke;
         btnDel.Click += (_, _) => { DeleteTeam(team); };
         card.Controls.Add(btnDel);
 
