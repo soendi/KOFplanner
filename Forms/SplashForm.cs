@@ -7,10 +7,11 @@ public class SplashForm : Form
 {
     private readonly Image? _img;
     private readonly System.Windows.Forms.Timer _timer;
-    private readonly Size _baseSize;
+    private readonly int _baseW;
+    private readonly int _baseH;
     private int _elapsed;
-    private const int HoldMs = 200;
-    private const int FadeMs = 400;
+    private const int HoldMs = 3000;
+    private const int FadeMs = 600;
 
     public SplashForm(int durationMs = 2500)
     {
@@ -35,8 +36,19 @@ public class SplashForm : Form
             _img = null;
         }
 
-        _baseSize = _img != null ? new Size(_img.Width / 2, _img.Height / 2) : new Size(400, 240);
-        ClientSize = _baseSize;
+        if (_img != null)
+        {
+            _baseW = _img.Width / 2;
+            _baseH = _img.Height / 2;
+            // the form is sized to fit the 200% zoom; the base image is drawn centered
+            ClientSize = new Size(_img.Width, _img.Height);
+        }
+        else
+        {
+            _baseW = 400;
+            _baseH = 240;
+            ClientSize = new Size(800, 480);
+        }
 
         _timer = new System.Windows.Forms.Timer { Interval = 16 };
         _timer.Tick += OnTick;
@@ -58,16 +70,7 @@ public class SplashForm : Form
         }
 
         double p = (double)t / FadeMs;
-        double ease = p * p; // beschleunigt
-
-        double scale = 1.0 + ease * 6.0;
-        int w = (int)(_baseSize.Width * scale);
-        int h = (int)(_baseSize.Height * scale);
-        ClientSize = new Size(w, h);
-        var screen = Screen.FromPoint(Location);
-        Location = new Point(
-            screen.WorkingArea.X + (screen.WorkingArea.Width - w) / 2,
-            screen.WorkingArea.Y + (screen.WorkingArea.Height - h) / 2);
+        double ease = p * p;
         Opacity = 1.0 - ease;
         Invalidate();
     }
@@ -75,6 +78,9 @@ public class SplashForm : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
+        int cx = ClientSize.Width / 2;
+        int cy = ClientSize.Height / 2;
+
         if (_img == null)
         {
             var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
@@ -83,8 +89,20 @@ public class SplashForm : Form
             return;
         }
 
+        double p = 0;
+        if (_elapsed > HoldMs)
+            p = Math.Min(1.0, (double)(_elapsed - HoldMs) / FadeMs);
+        double ease = p * p;
+
+        // zoom from 100% (base image) up to 200%, centered on the client center
+        double scale = 1.0 + ease;
+        int w = (int)(_baseW * scale);
+        int h = (int)(_baseH * scale);
+        int x = cx - w / 2;
+        int y = cy - h / 2;
+
         e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-        e.Graphics.DrawImage(_img, ClientRectangle);
+        e.Graphics.DrawImage(_img, x, y, w, h);
     }
 
     protected override void Dispose(bool disposing)
