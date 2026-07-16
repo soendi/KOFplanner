@@ -318,10 +318,18 @@ public class DatabaseService
     public void DeleteTeam(int id)
     {
         using var conn = GetConnection();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM Teams WHERE Id=@id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.ExecuteNonQuery();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM Assignments WHERE TeamId=@id";
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
+        }
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM Teams WHERE Id=@id";
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     // --- Construction Sites ---
@@ -372,14 +380,29 @@ public class DatabaseService
     public void DeleteSite(int id)
     {
         using var conn = GetConnection();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM Assignments WHERE ConstructionSiteId=@id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.ExecuteNonQuery();
-        using var cmd2 = conn.CreateCommand();
-        cmd2.CommandText = "DELETE FROM ConstructionSites WHERE Id=@id";
-        cmd2.Parameters.AddWithValue("@id", id);
-        cmd2.ExecuteNonQuery();
+        var teamIds = new List<int>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT DISTINCT TeamId FROM Assignments WHERE ConstructionSiteId=@id AND TeamId IS NOT NULL";
+            cmd.Parameters.AddWithValue("@id", id);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                teamIds.Add(r.GetInt32(0));
+        }
+        foreach (var teamId in teamIds)
+            DeleteTeam(teamId);
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM Assignments WHERE ConstructionSiteId=@id";
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
+        }
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM ConstructionSites WHERE Id=@id";
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     // --- Assignments ---
