@@ -1,4 +1,4 @@
 {
-  "version": "1.1.20.0",
-  "notes": "Kalender: MehrTages-Einsätze als ein durchgängiger Balken über alle Tage; Mitarbeiterliste zeigt echte Namen; 'Neues Team'-Dropzone 20px nach unten; Fahrzeuge als ListView (Fahrzeugnummer/Eigenschaft/Kennzeichen, sortiert); Baustellen als ListView; Tab 'Mitarbeiter informieren' mit Multiselect-Listen (STRG/Klick) und größerem Protokoll"
+  "version": "1.1.21.0",
+  "notes": "Bugfix: Fahrzeug-Drag&Drop aus der ListView auf Team-Karten wiederhergestellt (ItemDrag + AssignVehicleToTeam)"
 }
