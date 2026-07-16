@@ -1,4 +1,4 @@
 {
-  "version": "1.1.24.0",
-  "notes": "Kalender-Balken in Teamfarbe mit BAUSTELLE/TEAM/FAHRZEUG; Fahrzeug-Zuweisung beim Team-Zuordnen mit Verfügbarkeits- und Fahrerprüfung"
+  "version": "1.1.25.0",
+  "notes": "Tab 'Mitarbeiter informieren': ein Button 'Infos verschicken' mit Vorschau-Dialog (pro Person E-Mail/Druck wählbar, je nach hinterlegter Adresse/Papier-Präferenz)"
 }
