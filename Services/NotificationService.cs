@@ -62,7 +62,7 @@ public class NotificationService
         var tableTop = calTop + calH + 30;
         g.DrawString("Einsatze im Detail", bold, Brushes.Black, 40, tableTop);
         var y = tableTop + 30;
-        var cols = new[] { (40, 95, "Datum"), (135, 200, "Baustelle"), (335, 210, "Adresse"), (545, 70, "km"), (615, 80, "Fahrzeit"), (695, 92, "Team/Fahrzeug") };
+        var cols = new[] { (40, 70, "Datum"), (110, 100, "Baustelle"), (210, 230, "Adresse"), (440, 70, "km"), (510, 90, "Fahrzeit"), (600, 187, "Team/Fahrzeug") };
         using var headBg = new SolidBrush(Color.FromArgb(0x2E, 0x7D, 0x32));
         g.FillRectangle(headBg, 40, y - 4, w - 80, 22);
         foreach (var (x, wid, txt) in cols)
@@ -70,27 +70,40 @@ public class NotificationService
         y += 26;
         var byDate = assignments.OrderBy(a => a.Date).ThenBy(a => a.Site?.Name).ToList();
         using var linePen = new Pen(Color.LightGray);
-        foreach (var a in byDate)
+        for (var d = from.Date; d <= until.Date; d = d.AddDays(1))
         {
             if (y > h - 60) break;
-            var site = a.Site;
-            var datum = a.Date.ToString("ddd dd.MM.");
-            var baustelle = site?.Name ?? "";
-            var adresse = site?.Address ?? "";
-            var km = site != null && site.DistanceKm > 0 ? $"{site.DistanceKm:0.0}" : "–";
-            var fahrzeit = site != null && site.DurationMinutes > 0 ? site.DurationText : "–";
-            var info = "";
-            if (a.Team != null) info += a.Team.Name;
-            if (a.Vehicle != null) info += (info.Length > 0 ? " / " : "") + a.Vehicle.VehicleNumber;
-            if (a.Employee != null && a.Team == null) info += a.Employee.FullName;
-            g.DrawString(datum, small, Brushes.Black, cols[0].Item1, y);
-            g.DrawString(Truncate(baustelle, 26), small, Brushes.Black, cols[1].Item1, y);
-            g.DrawString(Truncate(adresse, 30), small, Brushes.Black, cols[2].Item1, y);
-            g.DrawString(km, small, Brushes.Black, cols[3].Item1, y);
-            g.DrawString(fahrzeit, small, Brushes.Black, cols[4].Item1, y);
-            g.DrawString(Truncate(info, 14), small, Brushes.Black, cols[5].Item1, y);
-            g.DrawLine(linePen, 40, y + 14, w - 40, y + 14);
-            y += 20;
+            var dayItems = byDate.Where(a => a.Date.Date == d).ToList();
+            if (dayItems.Count == 0)
+            {
+                g.DrawString(d.ToString("ddd dd.MM."), small, Brushes.Gray, cols[0].Item1, y);
+                g.DrawString("keine Einsatze", small, Brushes.Gray, cols[1].Item1, y);
+                g.DrawLine(linePen, 40, y + 14, w - 40, y + 14);
+                y += 20;
+                continue;
+            }
+            foreach (var a in dayItems)
+            {
+                if (y > h - 60) break;
+                var site = a.Site;
+                var datum = a.Date.ToString("ddd dd.MM.");
+                var baustelle = site?.Name ?? "";
+                var adresse = site?.Address ?? "";
+                var km = site != null && site.DistanceKm > 0 ? $"{site.DistanceKm:0.0}" : "–";
+                var fahrzeit = site != null && site.DurationMinutes > 0 ? site.DurationText : "–";
+                var info = "";
+                if (a.Team != null) info += a.Team.Name;
+                if (a.Vehicle != null) info += (info.Length > 0 ? " / " : "") + a.Vehicle.VehicleNumber;
+                if (a.Employee != null && a.Team == null) info += a.Employee.FullName;
+                g.DrawString(datum, small, Brushes.Black, cols[0].Item1, y);
+                g.DrawString(Truncate(baustelle, 13), small, Brushes.Black, cols[1].Item1, y);
+                g.DrawString(Truncate(adresse, 34), small, Brushes.Black, cols[2].Item1, y);
+                g.DrawString(km, small, Brushes.Black, cols[3].Item1, y);
+                g.DrawString(fahrzeit, small, Brushes.Black, cols[4].Item1, y);
+                g.DrawString(Truncate(info, 26), small, Brushes.Black, cols[5].Item1, y);
+                g.DrawLine(linePen, 40, y + 14, w - 40, y + 14);
+                y += 20;
+            }
         }
         if (byDate.Count == 0)
             g.DrawString("Keine Einsatze im gewahlten Zeitraum.", small, Brushes.Gray, 40, y);

@@ -18,6 +18,8 @@ public class MainForm : Form
     private int _calendarDayWidth, _calendarDayHeight;
     private readonly Point _calendarOrigin = new(15, 45);
     private List<Assignment> _monthAssignments = new();
+    private List<Assignment> _calAssignments = new();
+    private int? _filterEmployeeId;
     private List<Vacation> _vacations = new();
     private List<Sickness> _sickness = new();
     private readonly List<CalendarSpan> _spans = new();
@@ -38,6 +40,7 @@ public class MainForm : Form
     private List<Team> _teams = new();
     private List<Vehicle> _vehicles = new();
     private List<ConstructionSite> _sites = new();
+    private ComboBox _cmbEmployeeFilter = null!;
 
     // Sites whose "delete expired?" question was already shown this session (avoid nagging
     // on every refresh once the user answered).
@@ -163,7 +166,13 @@ public class MainForm : Form
         };
         StyleButton(btnView);
         _lblMonthYear = new Label { Text = "", Location = new Point(300, 8), AutoSize = true, Font = new Font(Font.FontFamily, 12, FontStyle.Bold) };
-        nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, btnView, _lblMonthYear });
+        _cmbEmployeeFilter = new ComboBox { Location = new Point(470, 8), Width = 200, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 9) };
+        _cmbEmployeeFilter.SelectedIndexChanged += (_, _) =>
+        {
+            _filterEmployeeId = _cmbEmployeeFilter.SelectedValue is int id && id > 0 ? id : null;
+            RefreshCalendar();
+        };
+        nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, btnView, _lblMonthYear, _cmbEmployeeFilter });
         tabKalender.Controls.Add(_calendarPanel);
         tabKalender.Controls.Add(nav);
         _tabControl.TabPages.Add(tabKalender);
@@ -354,10 +363,23 @@ public class MainForm : Form
         f.ShowDialog(this);
     }
 
+    private void PopulateEmployeeFilter()
+    {
+        var prev = _filterEmployeeId;
+        _cmbEmployeeFilter.DisplayMember = "Text";
+        _cmbEmployeeFilter.ValueMember = "Id";
+        var items = new List<object> { new { Id = 0, Text = "Alle Mitarbeiter" } };
+        foreach (var e in _employees)
+            items.Add(new { Id = e.Id, Text = e.FullName });
+        _cmbEmployeeFilter.DataSource = items;
+        _cmbEmployeeFilter.SelectedValue = prev ?? 0;
+    }
+
     // ====== REFRESH ======
     private void RefreshAllData()
     {
         _employees = _db.GetAllEmployees().OrderBy(e => e.FullName, StringComparer.CurrentCultureIgnoreCase).ToList();
+        PopulateEmployeeFilter();
         _teams = _db.GetAllTeams();
         _vehicles = _db.GetAllVehicles().OrderBy(v => v.VehicleNumber, StringComparer.CurrentCultureIgnoreCase).ToList();
         _sites = _db.GetAllSites();
@@ -564,6 +586,9 @@ public class MainForm : Form
         }
         _vacations = _db.GetAllVacations();
         _sickness = _db.GetAllSickness();
+        _calAssignments = _filterEmployeeId == null
+            ? _monthAssignments
+            : _monthAssignments.Where(a => IsForEmployee(a, _filterEmployeeId.Value)).ToList();
         BuildSpans();
         _calendarPanel.Invalidate();
     }
@@ -694,7 +719,7 @@ public class MainForm : Form
         using var db2 = new SolidBrush(isToday ? Color.FromArgb(0xC8, 0x53, 0x00) : SystemColors.WindowText);
         g.DrawString(date.Day.ToString(), df, db2, x + 3, y + 2);
 
-        var dayAssignments = _monthAssignments.Where(a => a.Date.Date == date.Date).ToList();
+        var dayAssignments = _calAssignments.Where(a => a.Date.Date == date.Date).ToList();
         if (dayAssignments.Count > 0 || HasDayBlock(date))
             DrawDayLines(g, date, dayAssignments, x, y, cw, ch, zoomed);
     }
@@ -788,7 +813,7 @@ public class MainForm : Form
 
     private string SpanSuffix(int? siteId, int? teamId, int? vehicleId, int? empId)
     {
-        var matches = _monthAssignments.Where(a =>
+        var matches = _calAssignments.Where(a =>
             a.ConstructionSiteId == (siteId ?? a.ConstructionSiteId) &&
             a.TeamId == (teamId ?? a.TeamId) &&
             a.VehicleId == (vehicleId ?? a.VehicleId) &&
@@ -817,12 +842,23 @@ public class MainForm : Form
         return $"S:{a.ConstructionSiteId}";
     }
 
+    private bool IsForEmployee(Assignment a, int empId)
+    {
+        if (a.EmployeeId == empId) return true;
+        if (a.TeamId.HasValue)
+        {
+            var team = _teams.FirstOrDefault(t => t.Id == a.TeamId.Value);
+            if (team != null && team.Members.Any(m => m.Id == empId)) return true;
+        }
+        return false;
+    }
+
     private void BuildSpans()
     {
         _spans.Clear();
         _multiDayKeys.Clear();
         _spanAssignmentIds.Clear();
-        var groups = _monthAssignments
+        var groups = _calAssignments
             .GroupBy(SpanKey)
             .ToList();
         foreach (var g in groups)
@@ -865,7 +901,7 @@ public class MainForm : Form
         _multiDayKeys.Add(SpanKey(sample));
         // Every assignment belonging to a multi-day run is drawn as one continuous
         // span bar, so its individual per-day lines must be suppressed.
-        foreach (var a in _monthAssignments.Where(a => SpanKey(a) == SpanKey(sample) && a.Date.Date >= from.Date && a.Date.Date <= to.Date))
+        foreach (var a in _calAssignments.Where(a => SpanKey(a) == SpanKey(sample) && a.Date.Date >= from.Date && a.Date.Date <= to.Date))
             _spanAssignmentIds.Add(a.Id);
     }
 
@@ -1205,7 +1241,7 @@ public class MainForm : Form
     // ====== DAY OVERVIEW ======
     private void ShowDayOverview(DateTime day)
     {
-        var das = _monthAssignments.Where(a => a.Date.Date == day.Date).ToList();
+        var das = _calAssignments.Where(a => a.Date.Date == day.Date).ToList();
 
         using var f = new Form();
         f.Text = $"Übersicht {day:dd.MM.yyyy}";
@@ -1242,7 +1278,7 @@ public class MainForm : Form
                     Margin = new Padding(0, 12, 0, 4)
                 });
 
-                var siteEntries = BuildDayEntries(_monthAssignments, day, site.Id).OrderBy(e => e.TeamId).ToList();
+                var siteEntries = BuildDayEntries(_calAssignments, day, site.Id).OrderBy(e => e.TeamId).ToList();
 
                 foreach (var entry in siteEntries)
                 {
