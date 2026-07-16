@@ -168,10 +168,12 @@ public class InformEmployeesForm : UserControl
     }
 
     // Collects the distinct employees and matching assignments for the chosen range.
-    //  - Nothing selected: ALL assignments of ALL employees in the period.
-    //  - Any selection: union of the selected categories (Baustelle / Team / Mitarbeiter).
-    //    An assignment matches if it belongs to ANY selected category. Explicitly selected
-    //    employees are always included with their own assignments in the period.
+    //  - NOTHING selected: ALL employees who have ANY assignment in the period (Baustelle/Team).
+    //  - ANY selection (in any column): ONLY the selection is honoured. The three categories
+    //    (Baustelle / Team / Mitarbeiter) are combined with AND, i.e. an assignment matches only
+    //    if it satisfies every category that is actually selected.
+    //    Explicitly selected employees are always included with ALL their assignments in the period,
+    //    and employees tied to a selected Baustelle also receive ALL their assignments in the period.
     private List<Employee> CollectEmployees(out List<Assignment> filtered, out DateTime from, out DateTime until)
     {
         from = _dtpFrom.Value.Date;
@@ -185,20 +187,20 @@ public class InformEmployeesForm : UserControl
         var teamMembers = _db.GetAllTeams().ToDictionary(t => t.Id, t => t.Members);
         var employees = _db.GetAllEmployees();
 
-        bool MatchesSite(Assignment a) => sites.Count == 0 || sites.Contains(a.ConstructionSiteId);
-        bool MatchesTeam(Assignment a) => teams.Count == 0 || (a.TeamId.HasValue && teams.Contains(a.TeamId.Value));
-        bool MatchesEmployee(Assignment a)
+        bool AssignmentBelongsToSelectedEmployee(Assignment a)
         {
-            if (selectedEmps.Count == 0) return true;
             if (a.EmployeeId.HasValue && selectedEmps.Contains(a.EmployeeId.Value)) return true;
             if (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var mem))
                 return mem.Any(m => selectedEmps.Contains(m.Id));
             return false;
         }
 
-        var matched = anyFilter
-            ? all.Where(a => MatchesSite(a) || MatchesTeam(a) || MatchesEmployee(a)).ToList()
-            : all.ToList();
+        // AND across categories: a category restricts only when it is actually selected.
+        var matched = all.Where(a =>
+            (sites.Count == 0 || sites.Contains(a.ConstructionSiteId)) &&
+            (teams.Count == 0 || (a.TeamId.HasValue && teams.Contains(a.TeamId.Value))) &&
+            (selectedEmps.Count == 0 || AssignmentBelongsToSelectedEmployee(a)))
+            .ToList();
 
         var empIds = new HashSet<int>();
 
