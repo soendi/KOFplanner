@@ -39,6 +39,10 @@ public class MainForm : Form
     private List<Vehicle> _vehicles = new();
     private List<ConstructionSite> _sites = new();
 
+    // Sites whose "delete expired?" question was already shown this session (avoid nagging
+    // on every refresh once the user answered).
+    private readonly HashSet<int> _expiredPrompted = new();
+
     // Tabs
     private readonly TabControl _tabControl;
     private readonly Panel _calendarPanel;
@@ -378,6 +382,28 @@ public class MainForm : Form
         RefreshSiteList();
         RefreshCalendar();
         _informForm?.RefreshLists();
+        PromptExpiredSites();
+    }
+
+    // Asks once per session whether a Baustelle whose EndDate is more than a week in the
+    // past should be deleted (including all linked calendar entries).
+    private void PromptExpiredSites()
+    {
+        var today = DateTime.Today;
+        var expired = _sites
+            .Where(s => s.EndDate.HasValue && s.EndDate.Value.Date < today.AddDays(-7))
+            .Where(s => !_expiredPrompted.Contains(s.Id))
+            .ToList();
+        foreach (var s in expired)
+        {
+            _expiredPrompted.Add(s.Id); // do not ask again this session, regardless of answer
+            var res = MessageBox.Show(
+                $"Die Baustelle \"{s.Name}\" ist am {s.EndDate.Value:dd.MM.yyyy} abgelaufen (mehr als eine Woche her).\n" +
+                "Soll sie zusammen mit allen zugehörigen Kalendereinträgen gelöscht werden?",
+                "Abgelaufene Baustelle", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (res == DialogResult.Yes)
+                DeleteSite(s); // removes the site and all linked assignments, then refreshes
+        }
     }
 
     private void RefreshVehicleList()

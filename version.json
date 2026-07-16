@@ -1,4 +1,4 @@
 {
-  "version": "1.1.37.0",
-  "notes": "Personen informieren: Mitarbeiter werden ueber alle 3 Kategorien (Baustelle/Team/Mitarbeiter) vereint und dedupliziert gesammelt, dann im Vorschau-Dialog gelistet"
+  "version": "1.1.38.0",
+  "notes": "Abgelaufene Baustellen (Enddatum > 1 Woche her) werden beim Laden abgefragt und samt Kalendereintraegen geloescht (einmal pro Sitzung)"
 }
