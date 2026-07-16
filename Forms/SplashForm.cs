@@ -21,6 +21,7 @@ public class SplashForm : Form
         ShowInTaskbar = false;
         TopMost = true;
         BackColor = Color.Black;
+        TransparencyKey = Color.Black;
         DoubleBuffered = true;
         Opacity = 1.0;
 
