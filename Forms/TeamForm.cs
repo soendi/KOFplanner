@@ -26,6 +26,7 @@ public class TeamForm : Form
 
     public TeamForm(DatabaseService db, Team? team, List<Employee> allEmployees, List<Vehicle> vehicles, Func<Team, Action, bool>? ensureDriver)
     {
+        IconHelper.Apply(this);
         _db = db;
         _team = team ?? new Team { Name = "" };
         _allEmployees = allEmployees;

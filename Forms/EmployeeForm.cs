@@ -16,6 +16,7 @@ public class EmployeeForm : Form
 
     public EmployeeForm(DatabaseService db, Employee? employee)
     {
+        IconHelper.Apply(this);
         _db = db;
         _employee = employee;
         Text = employee == null ? "Neuer Mitarbeiter" : "Mitarbeiter bearbeiten";

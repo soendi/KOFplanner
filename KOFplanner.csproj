@@ -8,10 +8,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>KOFplanner</AssemblyName>
     <RootNamespace>KOFplanner</RootNamespace>
-     <Version>1.1.41.0</Version>
+     <Version>1.1.42.0</Version>
     <Company>Lukas Sonderegger</Company>
     <Authors>Lukas Sonderegger</Authors>
     <Description>KOFplanner - Baustelleneinsatzplanung</Description>
+    <ApplicationIcon>Resources\KOFplanner.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +23,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\splashscreen.png" />
+    <None Include="Resources\KOFplanner.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

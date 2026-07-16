@@ -6,6 +6,7 @@ public class SplashForm : Form
 {
     public SplashForm(int durationMs = 2500)
     {
+        IconHelper.Apply(this);
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
         ShowInTaskbar = false;

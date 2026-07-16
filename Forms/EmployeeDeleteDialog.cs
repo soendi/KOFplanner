@@ -6,6 +6,7 @@ internal sealed class EmployeeDeleteDialog : Form
 
     public EmployeeDeleteDialog(string employeeName, string teamNames)
     {
+        IconHelper.Apply(this);
         Text = "Mitarbeiter löschen";
         Size = new Size(460, 240);
         StartPosition = FormStartPosition.CenterParent;

@@ -82,6 +82,7 @@ public class MainForm : Form
 
     public MainForm(DatabaseService db, BackupService backup, UpdateService update, SettingsService settings)
     {
+        IconHelper.Apply(this);
         _settings = settings;
         _db = db;
         _backup = backup;

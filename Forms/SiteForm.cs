@@ -15,6 +15,7 @@ public class SiteForm : Form
 
     public SiteForm(DatabaseService db, SettingsService settings, ConstructionSite? site)
     {
+        IconHelper.Apply(this);
         _db = db;
         _settings = settings;
         _site = site;

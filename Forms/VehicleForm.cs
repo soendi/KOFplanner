@@ -12,7 +12,7 @@ public class VehicleForm : Form
 
     public VehicleForm(DatabaseService db, Vehicle? vehicle)
     {
-        _db = db;
+        IconHelper.Apply(this);
         _vehicle = vehicle;
         Text = vehicle == null ? "Neues Fahrzeug" : "Fahrzeug bearbeiten";
         StartPosition = FormStartPosition.CenterParent;

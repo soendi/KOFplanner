@@ -15,6 +15,7 @@ internal sealed class RemoveMemberDialog : Form
 
     public RemoveMemberDialog(string teamName, string memberName, Vehicle vehicle, List<Vehicle> vehicles)
     {
+        IconHelper.Apply(this);
         Text = "Teammitglied entfernen";
         Size = new Size(460, 320);
         StartPosition = FormStartPosition.CenterParent;

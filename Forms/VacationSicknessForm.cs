@@ -15,6 +15,7 @@ public class VacationSicknessForm : Form
 
     public VacationSicknessForm(DatabaseService db, List<Employee> employees)
     {
+        IconHelper.Apply(this);
         _db = db;
         _employees = employees;
         Text = "Urlaub & Krankheit verwalten";

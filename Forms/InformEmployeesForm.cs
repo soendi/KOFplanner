@@ -275,6 +275,7 @@ internal sealed class InformPreviewForm : Form
 
     public InformPreviewForm(List<Employee> employees)
     {
+        IconHelper.Apply(this);
         Text = "Personen informieren";
         Size = new Size(520, 460);
         StartPosition = FormStartPosition.CenterParent;

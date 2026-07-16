@@ -12,7 +12,7 @@ public class SettingsForm : Form
 
     public SettingsForm(SettingsService settings)
     {
-        _settings = settings;
+        IconHelper.Apply(this);
         var s = _settings.Load();
 
         Text = "Einstellungen";
