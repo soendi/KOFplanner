@@ -1,4 +1,4 @@
 {
-  "version": "1.1.23.0",
-  "notes": "Baustelle löschen löscht kaskadierend Teams und Kalender-Einträge; Mitarbeiter-Doppelklick-Editor; Fahrer-Konflikt-Dialoge vergrößert"
+  "version": "1.1.24.0",
+  "notes": "Kalender-Balken in Teamfarbe mit BAUSTELLE/TEAM/FAHRZEUG; Fahrzeug-Zuweisung beim Team-Zuordnen mit Verfügbarkeits- und Fahrerprüfung"
 }
