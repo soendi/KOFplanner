@@ -1,4 +1,4 @@
 {
-  "version": "1.1.35.0",
-  "notes": "Bugfix: ueberschneidende Termine (z.B. 08-24 + 14-16) wurden beim Anlegen unterdrueckt -> Luecken im durchgehenden Termin; nur noch echte Duplikate (gleiche Baustelle/Team/MA/Fahrzeug) werden uebersprungen"
+  "version": "1.1.36.0",
+  "notes": "Bugfix: Vorschau-Dialog 'Personen informieren' zeigte OK/Abbrechen nicht (Knopfleiste war in schmale Spalte eingeklemmt) -> jetzt volle Breite"
 }

@@ -270,12 +270,9 @@ internal sealed class InformPreviewForm : Form
         MinimizeBox = false;
         Font = new Font("Segoe UI", 9.5f);
 
-        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(10) };
-        tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
-        tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(10) };
         tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
         var grid = new DataGridView
         {
@@ -307,11 +304,10 @@ internal sealed class InformPreviewForm : Form
             row.Cells[2].ReadOnly = !paper;     // Druck only selectable if paper preference set
         }
         tlp.Controls.Add(grid, 0, 0);
-        tlp.SetColumnSpan(grid, 3);
 
-        var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        var btnOk = new Button { Text = "Senden", Width = 120, Height = 30, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Abbrechen", Width = 120, Height = 30, DialogResult = DialogResult.Cancel };
+        var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
+        var btnOk = new Button { Text = "Senden", Width = 120, Height = 32, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Abbrechen", Width = 120, Height = 32, DialogResult = DialogResult.Cancel };
         btnOk.Click += (_, _) =>
         {
             Choices.Clear();
@@ -324,7 +320,7 @@ internal sealed class InformPreviewForm : Form
             }
         };
         flp.Controls.AddRange(new Control[] { btnCancel, btnOk });
-        tlp.Controls.Add(flp, 2, 1);
+        tlp.Controls.Add(flp, 0, 1);
 
         Controls.Add(tlp);
         CancelButton = btnCancel;
