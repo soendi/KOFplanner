@@ -38,6 +38,7 @@ Name: "desktopicon"; Description: "Desktopverknüpfung erstellen"; GroupDescript
 [Files]
 Source: "pub\*.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "pub\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "HILFE.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Registry]
 Root: "HKCU"; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; Flags: uninsdeletekey

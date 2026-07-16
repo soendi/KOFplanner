@@ -24,4 +24,10 @@
     <EmbeddedResource Include="Resources\splashscreen.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="HILFE.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

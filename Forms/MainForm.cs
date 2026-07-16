@@ -80,7 +80,8 @@ public class MainForm : Form
         dateiMenu.DropDownItems.Add(new ToolStripSeparator());
         dateiMenu.DropDownItems.Add("Beenden", null, (_, _) => Close());
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
-        hilfeMenu!.DropDownItems.Add("Nach Updates suchen...", null, async (_, _) => await CheckUpdate());
+        hilfeMenu!.DropDownItems.Add("Hilfe öffnen...", null, (_, _) => OpenHelp());
+        hilfeMenu.DropDownItems.Add("Nach Updates suchen...", null, async (_, _) => await CheckUpdate());
         hilfeMenu.DropDownItems.Add("Info", null, (_, _) => MessageBox.Show($"KOFplanner v{_update.CurrentVersion}\nAuthor: Lukas Sonderegger", "Info"));
         MainMenuStrip = menu;
         Controls.Add(menu);
@@ -1705,6 +1706,20 @@ public class MainForm : Form
     }
 
     // ====== VAC/SICK CONFLICT CHECK ======
+    private void OpenHelp()
+    {
+        // Die Hilfe-Datei liegt neben der ausführbaren Datei (HILFE.md).
+        var exeDir = AppContext.BaseDirectory;
+        var path = Path.Combine(exeDir, "HILFE.md");
+        if (!File.Exists(path))
+        {
+            MessageBox.Show($"Hilfe-Datei nicht gefunden:\n{path}", "Hilfe", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+        catch (Exception ex) { MessageBox.Show($"Hilfe konnte nicht geöffnet werden:\n{ex.Message}", "Hilfe", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+    }
+
     // ====== BACKUP ======
     private async Task DoBackup()
     {
