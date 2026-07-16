@@ -21,6 +21,7 @@ public class MainForm : Form
     private List<Sickness> _sickness = new();
     private readonly List<CalendarSpan> _spans = new();
     private readonly HashSet<string> _multiDayKeys = new();
+    private readonly HashSet<int> _spanAssignmentIds = new();
 
     private sealed class CalendarSpan
     {
@@ -585,41 +586,41 @@ public class MainForm : Form
     {
         var lines = new List<(string Label, Color Fill, Color Border, Color Text)>();
 
-        var teamAssignments = day.Where(a => a.Team != null).ToList();
+        // Assignments that are part of a multi-day span are drawn as one continuous bar,
+        // so their individual per-day lines (team, site, vehicle, employee) are suppressed here.
+        var visible = day.Where(a => !_spanAssignmentIds.Contains(a.Id)).ToList();
+
+        var teamAssignments = visible.Where(a => a.Team != null).ToList();
         var connectedSiteIds = new HashSet<int>();
 
         foreach (var ta in teamAssignments)
         {
             var site = ta.Site!;
-            if (_multiDayKeys.Contains($"T:{site.Id}:{ta.TeamId}")) continue;
             var team = ta.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == ta.TeamId.Value) ?? ta.Team! : ta.Team!;
             connectedSiteIds.Add(site.Id);
             var color = team.Color;
-            var vehicles = day.Where(a => a.Vehicle != null && a.ConstructionSiteId == site.Id)
+            var vehicles = visible.Where(a => a.Vehicle != null && a.ConstructionSiteId == site.Id)
                               .Select(a => a.Vehicle!).DistinctBy(v => v.Id)
                               .OrderBy(v => v.VehicleNumber).ToList();
             var vehicleText = vehicles.Count > 0 ? string.Join(", ", vehicles.Select(v => v.VehicleNumber)) : "–";
             lines.Add(($"{site.Name} / {team.Name} / {vehicleText}{SpanSuffix(ta)}", color, color, Color.White));
         }
 
-        foreach (var site in day.Select(a => a.Site).OfType<ConstructionSite>()
+        foreach (var site in visible.Select(a => a.Site).OfType<ConstructionSite>()
                      .Where(s => !connectedSiteIds.Contains(s.Id)).DistinctBy(s => s.Id).OrderBy(s => s.Name))
         {
-            if (_multiDayKeys.Contains($"S:{site.Id}")) continue;
             lines.Add((site.Name + SpanSuffix(site.Id, null, null, null), Color.White, Color.Black, Color.Black));
         }
 
-        foreach (var v in day.Select(a => a.Vehicle).OfType<Vehicle>()
-                      .Where(v => !connectedSiteIds.Contains(v.Id == 0 ? -1 : day.First(a => a.Vehicle != null && a.Vehicle.Id == v.Id).ConstructionSiteId))
+        foreach (var v in visible.Select(a => a.Vehicle).OfType<Vehicle>()
+                      .Where(v => !connectedSiteIds.Contains(v.Id == 0 ? -1 : visible.First(a => a.Vehicle != null && a.Vehicle.Id == v.Id).ConstructionSiteId))
                       .DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber))
         {
-            if (_multiDayKeys.Contains($"V:{v.Id}")) continue;
             lines.Add((v.VehicleNumber + SpanSuffix(null, null, v.Id, null), Color.White, Color.Black, Color.Black));
         }
 
-        foreach (var emp in day.Select(a => a.Employee).OfType<Employee>().DistinctBy(e => e.Id).OrderBy(e => e.FullName))
+        foreach (var emp in visible.Select(a => a.Employee).OfType<Employee>().DistinctBy(e => e.Id).OrderBy(e => e.FullName))
         {
-            if (_multiDayKeys.Contains($"E:{emp.Id}")) continue;
             lines.Add(($"PN: {emp.FullName}{SpanSuffix(null, null, null, emp.Id)}", Color.White, Color.Black, Color.Black));
         }
 
@@ -700,6 +701,7 @@ public class MainForm : Form
     {
         _spans.Clear();
         _multiDayKeys.Clear();
+        _spanAssignmentIds.Clear();
         var groups = _monthAssignments
             .GroupBy(SpanKey)
             .Where(g => g.Min(a => a.Date.Date) != g.Max(a => a.Date.Date))
@@ -719,6 +721,9 @@ public class MainForm : Form
                 Text = SpanText(sample)
             });
             _multiDayKeys.Add(g.Key);
+            // Every assignment belonging to a multi-day group is drawn as one continuous
+            // span bar, so its individual per-day lines must be suppressed.
+            foreach (var a in g) _spanAssignmentIds.Add(a.Id);
         }
     }
 
@@ -1770,8 +1775,52 @@ public class MainForm : Form
 
     private void DeleteEmployee(Employee e)
     {
-        if (MessageBox.Show($"{e.FullName} wirklich löschen?", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-        { _db.DeleteEmployee(e.Id); RefreshAllData(); }
+        if (MessageBox.Show($"{e.FullName} wirklich löschen?", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+        // 1) Offene Termine: direkte Einzeltermine und Team-Termine (Mitgliedschaft).
+        var single = _db.GetAssignmentsForEmployee(e.Id, DateTime.MinValue, DateTime.MaxValue);
+        var teamTerm = _db.GetTeamAssignmentsForEmployee(e.Id);
+        if (single.Count > 0 || teamTerm.Count > 0)
+        {
+            var msgs = new List<string>();
+            if (single.Count > 0)
+            {
+                var d = single.Select(a => a.Date.Date).Distinct().OrderBy(x => x)
+                    .Select(x => x.ToString("dd.MM.yyyy"));
+                msgs.Add($"Einzeltermine: {single.Count} an {string.Join(", ", d)}");
+            }
+            if (teamTerm.Count > 0)
+            {
+                var d = teamTerm.Select(a => a.Date.Date).Distinct().OrderBy(x => x)
+                    .Select(x => x.ToString("dd.MM.yyyy"));
+                msgs.Add($"Team-Termine: {teamTerm.Count} an {string.Join(", ", d)}");
+            }
+            MessageBox.Show($"{e.FullName} kann nicht gelöscht werden.\nEs bestehen noch folgende Termine:\n" + string.Join("\n", msgs),
+                "Mitarbeiter noch eingeteilt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        // 2) Team-Mitgliedschaften: melden und Auswahl anbieten.
+        var teamIds = _db.GetEmployeeTeamIds(e.Id);
+        if (teamIds.Count > 0)
+        {
+            var teams = _teams.Where(t => teamIds.Contains(t.Id)).ToList();
+            var teamNames = string.Join(", ", teams.Select(t => t.Name));
+            using var dlg = new EmployeeDeleteDialog(e.FullName, teamNames);
+            var res = dlg.ShowDialog(this);
+            if (res == DialogResult.Cancel) return;
+            if (dlg.RemoveFromTeams)
+            {
+                foreach (var t in teams)
+                {
+                    t.Members.RemoveAll(m => m.Id == e.Id);
+                    _db.SaveTeam(t);
+                }
+            }
+        }
+
+        _db.DeleteEmployee(e.Id);
+        RefreshAllData();
     }
 
     private void EditTeam(Team? t)
@@ -1792,8 +1841,19 @@ public class MainForm : Form
 
     private void DeleteVehicle(Vehicle v)
     {
-        if (MessageBox.Show($"Fahrzeug {v} wirklich löschen?", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-        { _db.DeleteVehicle(v.Id); RefreshAllData(); }
+        if (MessageBox.Show($"Fahrzeug {v} wirklich löschen?", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+        var refs = _db.GetAssignmentsForVehicle(v.Id);
+        if (refs.Count > 0)
+        {
+            var days = refs.Select(a => a.Date.Date).Distinct().OrderBy(d => d).ToList();
+            var detail = string.Join(", ", days.Select(d => d.ToString("dd.MM.yyyy")));
+            MessageBox.Show($"Fahrzeug {v} kann nicht gelöscht werden.\nEs bestehen noch {refs.Count} Termin(e) an folgenden Tagen:\n{detail}",
+                "Fahrzeug noch in Verwendung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        _db.DeleteVehicle(v.Id);
+        RefreshAllData();
     }
 
     // Ensures that at least one team member can drive the assigned vehicle after a change.
@@ -2049,9 +2109,27 @@ public class MainForm : Form
                     }
                     if (dlg.Choice == RemoveMemberChoice.KeepAndChangeVehicle)
                     {
-                        var replacement = DriverConflict.PickVehicle(_vehicles, veh, this);
+                        // Only offer vehicles the remaining members are allowed to drive.
+                        var remainingMembers = team.Members.Where(m => m.Id != member.Id).ToList();
+                        var allowed = remainingMembers
+                            .Where(m => m.HasDriversLicense && !string.IsNullOrEmpty(m.LicenseCategories))
+                            .SelectMany(m => m.GetLicenseList()).Distinct().ToList();
                         team.Members.Remove(member);
-                        team.PreferredVehicleId = replacement?.Id;
+
+                        while (true)
+                        {
+                            var replacement = DriverConflict.PickVehicle(_vehicles, veh, allowed, this);
+                            if (replacement == null) { team.PreferredVehicleId = null; break; }
+                            // Re-validate: a remaining member must be allowed to drive the pick.
+                            if (allowed.Contains(replacement.RequiredLicense))
+                            {
+                                team.PreferredVehicleId = replacement.Id;
+                                break;
+                            }
+                            // Should not happen (Picker filters), but guard anyway.
+                            MessageBox.Show($"Kein Mitglied von Team \"{team.Name}\" darf Fahrzeug {replacement.VehicleNumber} ({replacement.RequiredLicense}) führen.",
+                                "Kein Fahrer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
                         _db.SaveTeam(team);
                         RefreshAllData();
                         return;
@@ -2188,8 +2266,8 @@ public class MainForm : Form
 
     private void DeleteSite(ConstructionSite site)
     {
-        if (MessageBox.Show($"Baustelle \"{site.Name}\" wirklich löschen?", "Löschen",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (MessageBox.Show($"Baustelle \"{site.Name}\" wirklich löschen?\nAlle zugehörigen Kalendereinträge werden entfernt (Teams bleiben erhalten).",
+                "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         _db.DeleteSite(site.Id);
         RefreshAllData();
     }

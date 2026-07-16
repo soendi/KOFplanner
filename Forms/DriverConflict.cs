@@ -59,6 +59,11 @@ internal static class DriverConflict
     }
 
     public static Vehicle? PickVehicle(List<Vehicle> vehicles, Vehicle? exclude, IWin32Window owner)
+        => PickVehicle(vehicles, exclude, null, owner);
+
+    // Offers only vehicles whose required license is contained in allowedLicenses
+    // (or every vehicle when allowedLicenses is null).
+    public static Vehicle? PickVehicle(List<Vehicle> vehicles, Vehicle? exclude, List<string>? allowedLicenses, IWin32Window owner)
     {
         using var f = new Form
         {
@@ -71,7 +76,10 @@ internal static class DriverConflict
             Font = new Font("Segoe UI", 9.5f)
         };
         var cmb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Left = 20, Top = 30, Width = 300 };
-        foreach (var v in vehicles.Where(v => exclude == null || v.Id != exclude.Id).OrderBy(v => v.VehicleNumber))
+        var candidates = vehicles.Where(v => exclude == null || v.Id != exclude.Id);
+        if (allowedLicenses != null)
+            candidates = candidates.Where(v => allowedLicenses.Contains(v.RequiredLicense));
+        foreach (var v in candidates.OrderBy(v => v.VehicleNumber))
             cmb.Items.Add(v);
         cmb.DisplayMember = "VehicleNumber";
         if (cmb.Items.Count > 0) cmb.SelectedIndex = 0;

@@ -1,4 +1,4 @@
 {
-  "version": "1.1.26.0",
-  "notes": "Bugfix 'Infos verschicken': Team-Mitglieder werden jetzt korrekt ermittelt (keine Personen-Filter-Logik beim nicht ausgewählten Mitarbeiter-Listen)"
+  "version": "1.1.27.0",
+  "notes": "Fahrzeugwechsel beim Entfernen des letzten Fahrers prüft restliche Mitglieder; Kalender zeigt bei verknüpften Mehrtages-Terminen nur noch den durchgehenden Balken (keine Einzelzeilen)"
 }

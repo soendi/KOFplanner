@@ -380,17 +380,8 @@ public class DatabaseService
     public void DeleteSite(int id)
     {
         using var conn = GetConnection();
-        var teamIds = new List<int>();
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT DISTINCT TeamId FROM Assignments WHERE ConstructionSiteId=@id AND TeamId IS NOT NULL";
-            cmd.Parameters.AddWithValue("@id", id);
-            using var r = cmd.ExecuteReader();
-            while (r.Read())
-                teamIds.Add(r.GetInt32(0));
-        }
-        foreach (var teamId in teamIds)
-            DeleteTeam(teamId);
+        // Delete all calendar entries referencing this site. Teams stay intact
+        // (they may be reused on other sites). Cascading foreign keys handle the rest.
         using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = "DELETE FROM Assignments WHERE ConstructionSiteId=@id";
@@ -537,6 +528,75 @@ public class DatabaseService
             if (!r.IsDBNull(14))
                 a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(14), LastName = r.GetString(15) };
             list.Add(a);
+        }
+        return list;
+    }
+
+    // All assignments that reference the given vehicle (any day).
+    public List<Assignment> GetAssignmentsForVehicle(int vehicleId)
+    {
+        var list = new List<Assignment>();
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT a.Id, a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId, a.Date,
+                   cs.Name, t.Name
+            FROM Assignments a
+            JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
+            LEFT JOIN Teams t ON a.TeamId = t.Id
+            WHERE a.VehicleId = @vid
+            ORDER BY a.Date";
+        cmd.Parameters.AddWithValue("@vid", vehicleId);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new Assignment
+            {
+                Id = r.GetInt32(0),
+                ConstructionSiteId = r.GetInt32(1),
+                TeamId = r.IsDBNull(2) ? null : r.GetInt32(2),
+                VehicleId = r.IsDBNull(3) ? null : r.GetInt32(3),
+                EmployeeId = r.IsDBNull(4) ? null : r.GetInt32(4),
+                Date = DateTime.Parse(r.GetString(5)),
+                Site = new ConstructionSite { Id = r.GetInt32(1), Name = r.GetString(6) },
+                Team = r.IsDBNull(7) ? null : new Team { Id = r.GetInt32(2), Name = r.GetString(7) }
+            });
+        }
+        return list;
+    }
+
+    // Assignments where the employee is a member of the assigned team (team-termine),
+    // but NOT single entries that directly carry the employee (those are covered by
+    // GetAssignmentsForEmployee). Returns the distinct team assignments.
+    public List<Assignment> GetTeamAssignmentsForEmployee(int employeeId)
+    {
+        var list = new List<Assignment>();
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT DISTINCT a.Id, a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId, a.Date,
+                   cs.Name, t.Name
+            FROM Assignments a
+            JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
+            JOIN Teams t ON a.TeamId = t.Id
+            JOIN TeamMembers tm ON tm.TeamId = t.Id
+            WHERE tm.EmployeeId = @eid AND (a.EmployeeId IS NULL OR a.EmployeeId != @eid)
+            ORDER BY a.Date";
+        cmd.Parameters.AddWithValue("@eid", employeeId);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new Assignment
+            {
+                Id = r.GetInt32(0),
+                ConstructionSiteId = r.GetInt32(1),
+                TeamId = r.IsDBNull(2) ? null : r.GetInt32(2),
+                VehicleId = r.IsDBNull(3) ? null : r.GetInt32(3),
+                EmployeeId = r.IsDBNull(4) ? null : r.GetInt32(4),
+                Date = DateTime.Parse(r.GetString(5)),
+                Site = new ConstructionSite { Id = r.GetInt32(1), Name = r.GetString(6) },
+                Team = r.IsDBNull(7) ? null : new Team { Id = r.GetInt32(2), Name = r.GetString(7) }
+            });
         }
         return list;
     }
