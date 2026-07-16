@@ -9,8 +9,8 @@ public class SplashForm : Form
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Size _baseSize;
     private int _elapsed;
-    private const int HoldMs = 350;
-    private const int FadeMs = 550;
+    private const int HoldMs = 200;
+    private const int FadeMs = 400;
 
     public SplashForm(int durationMs = 2500)
     {
@@ -60,8 +60,14 @@ public class SplashForm : Form
         double p = (double)t / FadeMs;
         double ease = p * p; // beschleunigt
 
-        double scale = 1.0 + ease * 5.0;
-        ClientSize = new Size((int)(_baseSize.Width * scale), (int)(_baseSize.Height * scale));
+        double scale = 1.0 + ease * 6.0;
+        int w = (int)(_baseSize.Width * scale);
+        int h = (int)(_baseSize.Height * scale);
+        ClientSize = new Size(w, h);
+        var screen = Screen.FromPoint(Location);
+        Location = new Point(
+            screen.WorkingArea.X + (screen.WorkingArea.Width - w) / 2,
+            screen.WorkingArea.Y + (screen.WorkingArea.Height - h) / 2);
         Opacity = 1.0 - ease;
         Invalidate();
     }

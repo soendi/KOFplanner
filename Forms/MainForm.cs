@@ -677,18 +677,21 @@ public class MainForm : Form
 
     private void DrawDayCell(Graphics g, DateTime date, int x, int y, int cw, int ch, bool zoomed)
     {
+        bool isToday = date == DateTime.Today;
         var back = Color.White;
-        if (IsInDragRange(date)) back = Color.FromArgb(200, 220, 255);
-        else if (date == DateTime.Today) back = Color.FromArgb(220, 235, 252);
+        if (isToday) back = Color.FromArgb(255, 229, 204); // hellorange
+        else if (IsInDragRange(date)) back = Color.FromArgb(200, 220, 255);
         else if (!IsFocusDate(date)) back = Color.FromArgb(0xD6, 0xE8, 0xF5); // außerhalb des Fokus-Monats: hellblau
         else if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) back = Color.FromArgb(248, 248, 248);
         using var bb = new SolidBrush(back);
         g.FillRectangle(bb, x, y, cw, ch);
-        using var p2 = new Pen(zoomed ? Color.FromArgb(0x2E, 0x7D, 0x32) : Color.FromArgb(0xBB, 0xBB, 0xBB), zoomed ? 2 : 1);
+        using var p2 = new Pen(zoomed ? Color.FromArgb(0x2E, 0x7D, 0x32)
+            : isToday ? Color.FromArgb(0xF2, 0x8A, 0x11)
+            : Color.FromArgb(0xBB, 0xBB, 0xBB), zoomed ? 2 : (isToday ? 2 : 1));
         g.DrawRectangle(p2, x, y, cw, ch);
 
         using var df = new Font(Font.FontFamily, zoomed ? 10 : 8);
-        using var db2 = new SolidBrush(date == DateTime.Today ? Color.Blue : SystemColors.WindowText);
+        using var db2 = new SolidBrush(isToday ? Color.FromArgb(0xC8, 0x53, 0x00) : SystemColors.WindowText);
         g.DrawString(date.Day.ToString(), df, db2, x + 3, y + 2);
 
         var dayAssignments = _monthAssignments.Where(a => a.Date.Date == date.Date).ToList();
