@@ -1,4 +1,4 @@
 {
-  "version": "1.1.32.0",
-  "notes": "Bugfix: durchgehende Termine fuellen keine Luecken mehr; gleiches Team/Baustelle mit Tagen 'nichts' dazwischen => separate Balken"
+  "version": "1.1.33.0",
+  "notes": "Bugfix: ueberschneidende/ Deckende Termine werden auf separaten Zeilen (Lanes) gezeichnet statt kongruent uebereinander"
 }

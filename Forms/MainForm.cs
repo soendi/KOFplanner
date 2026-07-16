@@ -32,6 +32,7 @@ public class MainForm : Form
         public Color Fill;
         public Color Border;
         public Color Text;
+        public int Lane;
     }
     private List<Employee> _employees = new();
     private List<Team> _teams = new();
@@ -865,36 +866,69 @@ public class MainForm : Form
     private void DrawSpanBars(Graphics g)
     {
         using var sf = new Font(Font.FontFamily, 7);
+
+        // Build one segment per calendar row (week) so spans crossing a weekend /
+        // week boundary continue correctly instead of being cut off.
+        var segments = new List<(CalendarSpan Span, DateTime SegStart, DateTime SegEnd, int Row)>();
         foreach (var s in _spans)
         {
-            // Draw one segment per calendar row (week) so spans crossing a weekend /
-            // week boundary continue correctly instead of being cut off.
             var day = s.From;
             while (day <= s.To)
             {
                 var segStart = day;
                 var segEnd = day;
                 var row = CellRow(segStart);
-                // Extend the segment while we stay in the same row and within the span.
                 while (segEnd < s.To && CellRow(segEnd.AddDays(1)) == row)
                     segEnd = segEnd.AddDays(1);
                 day = segEnd.AddDays(1);
-
-                var (x1, y1) = GetCellPosition(segStart);
-                var (x2, y2) = GetCellPosition(segEnd);
-                if (x1 < 0 || x2 < 0) continue;
-                var barY = y1 + 16;
-                var barX = x1 + 2;
-                var barW = (x2 - x1) + _calendarDayWidth - 4;
-                var barH = 12;
-                using var fb = new SolidBrush(s.Fill);
-                g.FillRectangle(fb, barX, barY, barW, barH);
-                using var bp = new Pen(s.Border, 1);
-                g.DrawRectangle(bp, barX, barY, barW, barH);
-                var detail = FitText(g, sf, s.Label, barW - 4, 120);
-                using var tb = new SolidBrush(s.Text);
-                g.DrawString(detail, sf, tb, barX + 2, barY + 1);
+                segments.Add((s, segStart, segEnd, row));
             }
+        }
+
+        // Assign lanes per row so overlapping spans are drawn on separate sub-rows
+        // instead of being drawn on top of each other.
+        var barH = 12;
+        var barGap = 1;
+        foreach (var rowGroup in segments.GroupBy(x => x.Row))
+        {
+            var sorted = rowGroup.OrderBy(x => x.SegStart).ToList();
+            var laneFreeFrom = new List<DateTime>(); // first date a lane becomes free again
+            foreach (var seg in sorted)
+            {
+                var placed = false;
+                for (var l = 0; l < laneFreeFrom.Count; l++)
+                {
+                    if (seg.SegStart > laneFreeFrom[l]) // no overlap -> reuse this lane
+                    {
+                        seg.Span.Lane = l;
+                        laneFreeFrom[l] = seg.SegEnd;
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed)
+                {
+                    seg.Span.Lane = laneFreeFrom.Count;
+                    laneFreeFrom.Add(seg.SegEnd);
+                }
+            }
+        }
+
+        foreach (var (s, segStart, segEnd, _) in segments)
+        {
+            var (x1, y1) = GetCellPosition(segStart);
+            var (x2, y2) = GetCellPosition(segEnd);
+            if (x1 < 0 || x2 < 0) continue;
+            var barY = y1 + 16 + s.Lane * (barH + barGap);
+            var barX = x1 + 2;
+            var barW = (x2 - x1) + _calendarDayWidth - 4;
+            using var fb = new SolidBrush(s.Fill);
+            g.FillRectangle(fb, barX, barY, barW, barH);
+            using var bp = new Pen(s.Border, 1);
+            g.DrawRectangle(bp, barX, barY, barW, barH);
+            var detail = FitText(g, sf, s.Label, barW - 4, 120);
+            using var tb = new SolidBrush(s.Text);
+            g.DrawString(detail, sf, tb, barX + 2, barY + 1);
         }
     }
 
