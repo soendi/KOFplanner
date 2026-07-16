@@ -1,4 +1,4 @@
 {
-  "version": "1.1.40.0",
-  "notes": "Baustelle bearbeiten: Name- und Adressfelder werden mit den aktuellen Daten gefuellt (keine leere Maske)"
+  "version": "1.1.41.0",
+  "notes": "Einsatzplan (Info an MA): Spalten km und Fahrzeit je Baustelle hinzugefuegt, Spalten neu ausgewogen"
 }

@@ -62,7 +62,7 @@ public class NotificationService
         var tableTop = calTop + calH + 30;
         g.DrawString("Einsatze im Detail", bold, Brushes.Black, 40, tableTop);
         var y = tableTop + 30;
-        var cols = new[] { (40, 110, "Datum"), (150, 230, "Baustelle"), (380, 240, "Adresse"), (620, 130, "Team/Fahrzeug") };
+        var cols = new[] { (40, 95, "Datum"), (135, 200, "Baustelle"), (335, 210, "Adresse"), (545, 70, "km"), (615, 80, "Fahrzeit"), (695, 92, "Team/Fahrzeug") };
         using var headBg = new SolidBrush(Color.FromArgb(0x2E, 0x7D, 0x32));
         g.FillRectangle(headBg, 40, y - 4, w - 80, 22);
         foreach (var (x, wid, txt) in cols)
@@ -77,14 +77,18 @@ public class NotificationService
             var datum = a.Date.ToString("ddd dd.MM.");
             var baustelle = site?.Name ?? "";
             var adresse = site?.Address ?? "";
+            var km = site != null && site.DistanceKm > 0 ? $"{site.DistanceKm:0.0}" : "–";
+            var fahrzeit = site != null && site.DurationMinutes > 0 ? site.DurationText : "–";
             var info = "";
             if (a.Team != null) info += a.Team.Name;
             if (a.Vehicle != null) info += (info.Length > 0 ? " / " : "") + a.Vehicle.VehicleNumber;
             if (a.Employee != null && a.Team == null) info += a.Employee.FullName;
             g.DrawString(datum, small, Brushes.Black, cols[0].Item1, y);
-            g.DrawString(Truncate(baustelle, 28), small, Brushes.Black, cols[1].Item1, y);
-            g.DrawString(Truncate(adresse, 22), small, Brushes.Black, cols[2].Item1, y);
-            g.DrawString(Truncate(info, 18), small, Brushes.Black, cols[3].Item1, y);
+            g.DrawString(Truncate(baustelle, 26), small, Brushes.Black, cols[1].Item1, y);
+            g.DrawString(Truncate(adresse, 30), small, Brushes.Black, cols[2].Item1, y);
+            g.DrawString(km, small, Brushes.Black, cols[3].Item1, y);
+            g.DrawString(fahrzeit, small, Brushes.Black, cols[4].Item1, y);
+            g.DrawString(Truncate(info, 14), small, Brushes.Black, cols[5].Item1, y);
             g.DrawLine(linePen, 40, y + 14, w - 40, y + 14);
             y += 20;
         }
