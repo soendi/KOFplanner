@@ -167,8 +167,11 @@ public class InformEmployeesForm : UserControl
         }
     }
 
-    // Collects the distinct employees for the chosen range across ALL three categories
-    // (Baustelle, Team, Mitarbeiter) as a deduplicated union.
+    // Collects the distinct employees and matching assignments for the chosen range.
+    //  - Nothing selected: ALL assignments of ALL employees in the period.
+    //  - Any selection: union of the selected categories (Baustelle / Team / Mitarbeiter).
+    //    An assignment matches if it belongs to ANY selected category. Explicitly selected
+    //    employees are always included with their own assignments in the period.
     private List<Employee> CollectEmployees(out List<Assignment> filtered, out DateTime from, out DateTime until)
     {
         from = _dtpFrom.Value.Date;
@@ -176,44 +179,70 @@ public class InformEmployeesForm : UserControl
         var sites = SelectedTags(_lstSites).Cast<ConstructionSite>().Select(s => s.Id).ToHashSet();
         var teams = SelectedTags(_lstTeams).Cast<Team>().Select(t => t.Id).ToHashSet();
         var selectedEmps = SelectedTags(_lstEmployees).Cast<Employee>().Select(e => e.Id).ToHashSet();
+        bool anyFilter = sites.Count > 0 || teams.Count > 0 || selectedEmps.Count > 0;
 
         var all = _db.GetAllAssignments(from, until);
-
-        // Assignments that match the selected sites/teams. If nothing is selected in a
-        // category, that category does not restrict the result (all assignments qualify).
-        var matching = all.Where(a =>
-            (sites.Count == 0 || sites.Contains(a.ConstructionSiteId)) &&
-            (teams.Count == 0 || (a.TeamId.HasValue && teams.Contains(a.TeamId.Value))))
-            .ToList();
-
         var teamMembers = _db.GetAllTeams().ToDictionary(t => t.Id, t => t.Members);
         var employees = _db.GetAllEmployees();
 
+        bool MatchesSite(Assignment a) => sites.Count == 0 || sites.Contains(a.ConstructionSiteId);
+        bool MatchesTeam(Assignment a) => teams.Count == 0 || (a.TeamId.HasValue && teams.Contains(a.TeamId.Value));
+        bool MatchesEmployee(Assignment a)
+        {
+            if (selectedEmps.Count == 0) return true;
+            if (a.EmployeeId.HasValue && selectedEmps.Contains(a.EmployeeId.Value)) return true;
+            if (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var mem))
+                return mem.Any(m => selectedEmps.Contains(m.Id));
+            return false;
+        }
+
+        var matched = anyFilter
+            ? all.Where(a => MatchesSite(a) || MatchesTeam(a) || MatchesEmployee(a)).ToList()
+            : all.ToList();
+
         var empIds = new HashSet<int>();
 
-        // 1) Employees from the matching assignments (team members + directly assigned employees).
-        foreach (var a in matching)
+        // Employees from the matched assignments (team members + directly assigned employees).
+        // Track which employees come from a selected BAUSTELLE so we can show them ALL their
+        // assignments in the period (not only the ones belonging to that site).
+        var siteEmployeeIds = new HashSet<int>();
+        foreach (var a in matched)
         {
             if (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var members))
-                foreach (var m in members) empIds.Add(m.Id);
+            {
+                foreach (var m in members) { empIds.Add(m.Id); if (sites.Contains(a.ConstructionSiteId)) siteEmployeeIds.Add(m.Id); }
+            }
             else if (a.EmployeeId.HasValue)
+            {
                 empIds.Add(a.EmployeeId.Value);
+                if (sites.Contains(a.ConstructionSiteId)) siteEmployeeIds.Add(a.EmployeeId.Value);
+            }
         }
 
-        // 2) Explicitly selected employees (union, not a filter): include them when they
-        //    actually have an assignment somewhere in the period, so the report has content.
-        if (selectedEmps.Count > 0)
+        // Explicitly selected employees are always included (with their own assignments).
+        foreach (var id in selectedEmps) empIds.Add(id);
+
+        // Filtered assignments for the per-employee PDFs:
+        //  - the matched assignments, PLUS
+        //  - ALL assignments of explicitly selected employees, PLUS
+        //  - ALL assignments of employees tied to a selected Baustelle (they get their full period).
+        var filteredSet = new HashSet<int>(matched.Select(a => a.Id));
+        var filteredList = new List<Assignment>(matched);
+        var expandIds = new HashSet<int>(selectedEmps);
+        foreach (var id in siteEmployeeIds) expandIds.Add(id);
+        if (expandIds.Count > 0)
         {
-            var assignedInPeriod = new HashSet<int>(
-                all.Select(a => a.EmployeeId).Where(id => id.HasValue).Select(id => id.Value)
-                    .Concat(all.Where(a => a.TeamId.HasValue && teamMembers.ContainsKey(a.TeamId.Value))
-                                .SelectMany(a => teamMembers[a.TeamId.Value].Select(m => m.Id))));
-            foreach (var id in selectedEmps)
-                if (assignedInPeriod.Contains(id)) empIds.Add(id);
+            foreach (var a in all)
+            {
+                bool belongs =
+                    (a.EmployeeId.HasValue && expandIds.Contains(a.EmployeeId.Value)) ||
+                    (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var mem) && mem.Any(m => expandIds.Contains(m.Id)));
+                if (belongs && filteredSet.Add(a.Id))
+                    filteredList.Add(a);
+            }
         }
 
-        filtered = matching;
-        // Resolve distinct employees; dedup is inherent via the HashSet of ids.
+        filtered = filteredList;
         return employees.Where(e => empIds.Contains(e.Id)).OrderBy(e => e.LastName).ThenBy(e => e.FirstName).ToList();
     }
 
