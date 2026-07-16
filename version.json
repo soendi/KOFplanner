@@ -1,4 +1,4 @@
 {
-  "version": "1.1.22.0",
-  "notes": "Team-Editor komplett neu (Teamname, Farbe, Mitglieder + Fahrzeug-Verwaltung); Fahrerprüfung an allen Team-Link-Änderungen; Mitarbeiter-Doppelklick öffnet Editor"
+  "version": "1.1.23.0",
+  "notes": "Baustelle löschen löscht kaskadierend Teams und Kalender-Einträge; Mitarbeiter-Doppelklick-Editor; Fahrer-Konflikt-Dialoge vergrößert"
 }
