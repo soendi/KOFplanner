@@ -658,6 +658,27 @@ public class DatabaseService
         return (long)cmd.ExecuteScalar()! > 0;
     }
 
+    // Returns the assignment row linking the given team on the given day (any vehicle), or null.
+    public Assignment? GetTeamAssignmentOnDay(int teamId, DateTime date)
+    {
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Id, ConstructionSiteId, TeamId, VehicleId, EmployeeId, Date FROM Assignments WHERE TeamId=@tid AND Date=@d LIMIT 1";
+        cmd.Parameters.AddWithValue("@tid", teamId);
+        cmd.Parameters.AddWithValue("@d", date.ToString("yyyy-MM-dd"));
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+        return new Assignment
+        {
+            Id = r.GetInt32(0),
+            ConstructionSiteId = r.GetInt32(1),
+            TeamId = r.IsDBNull(2) ? (int?)null : r.GetInt32(2),
+            VehicleId = r.IsDBNull(3) ? (int?)null : r.GetInt32(3),
+            EmployeeId = r.IsDBNull(4) ? (int?)null : r.GetInt32(4),
+            Date = DateTime.Parse(r.GetString(5))
+        };
+    }
+
     public bool IsEmployeeAssigned(int employeeId, DateTime date, int? excludeAssignmentId = null)
     {
         using var conn = GetConnection();

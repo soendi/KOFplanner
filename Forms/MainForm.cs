@@ -714,7 +714,7 @@ public class MainForm : Form
             {
                 From = min,
                 To = max,
-                Label = SpanLabel(sample) + $" ({min:dd.MM.}–{max:dd.MM.})",
+                Label = SpanLabel(sample),
                 Fill = SpanFill(sample),
                 Border = SpanBorder(sample),
                 Text = SpanText(sample)
@@ -730,8 +730,9 @@ public class MainForm : Form
             var team = a.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == a.TeamId.Value) ?? a.Team! : a.Team!;
             var site = a.Site!;
             var vehicle = a.Vehicle;
-            var vehicleText = vehicle != null ? vehicle.VehicleNumber : "–";
-            return $"{site.Name} / {team.Name} / {vehicleText}";
+            if (vehicle != null)
+                return $"{site.Name} / {team.Name} / {vehicle.VehicleNumber}";
+            return $"{site.Name} / {team.Name}";
         }
         if (a.VehicleId.HasValue) return a.Vehicle!.VehicleNumber;
         if (a.EmployeeId.HasValue) return $"PN: {a.Employee!.FullName}";
@@ -1474,46 +1475,107 @@ public class MainForm : Form
 
     private void CheckAutoVehicleAssignment(Team team, int siteId, DateTime from, DateTime until)
     {
-        // Team already has a preferred vehicle -> assign it silently, no prompt.
+        // Team already has a preferred vehicle -> attach it to the team's rows on the days it is free.
         if (team.PreferredVehicleId.HasValue)
         {
             var pref = _vehicles.FirstOrDefault(v => v.Id == team.PreferredVehicleId.Value);
             if (pref != null)
             {
                 for (var d = from; d <= until; d = d.AddDays(1))
-                    if (!_db.IsVehicleAssigned(pref.Id, d))
-                        _db.SaveAssignment(new Assignment { ConstructionSiteId = siteId, VehicleId = pref.Id, Date = d });
+                    LinkVehicleToTeamRow(siteId, team.Id, pref.Id, d);
                 return;
             }
         }
 
+        // Team has no vehicle -> ask whether to assign one now.
+        if (MessageBox.Show($"Team \"{team.Name}\" hat kein Fahrzeug zugeordnet.\nSoll dem Team ein Fahrzeug zugewiesen werden?",
+                "Fahrzeug zuweisen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        // Only offer vehicles that at least one team member is allowed to drive.
         var canDrive = team.Members.Where(m => m.HasDriversLicense && !string.IsNullOrEmpty(m.LicenseCategories))
             .SelectMany(m => m.GetLicenseList()).Distinct().ToList();
         var compat = _vehicles.Where(v => canDrive.Contains(v.RequiredLicense)).ToList();
-        if (compat.Count == 0) return;
-        if (MessageBox.Show($"Team {team.Name} hat Fahrer für {string.Join(",", canDrive)}.\nFahrzeug zuweisen?", "Fahrzeug",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-
-        using var f = new Form();
-        f.Text = "Fahrzeug auswählen";
-        f.Size = new Size(400, 250);
-        f.StartPosition = FormStartPosition.CenterParent;
-        var lb = new ListBox { Dock = DockStyle.Fill, DataSource = compat, DisplayMember = "ToString" };
-        var btn = new Button { Text = "OK", Dock = DockStyle.Bottom };
-        StyleButton(btn);
-        Vehicle? sel = null;
-        btn.Click += (_, _) => { sel = lb.SelectedItem as Vehicle; f.Close(); };
-        f.Controls.Add(lb); f.Controls.Add(btn);
-        f.ShowDialog();
-        if (sel != null)
+        if (compat.Count == 0)
         {
+            MessageBox.Show($"Kein passendes Fahrzeug für die Fahrer von Team \"{team.Name}\" verfügbar.", "Fahrzeug",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        while (true)
+        {
+            var sel = PickVehicle(compat);
+            if (sel == null) return;
+
+            // Availability: the vehicle must be free on every day of the range.
+            var conflictDays = new List<DateTime>();
+            for (var d = from; d <= until; d = d.AddDays(1))
+                if (_db.IsVehicleAssigned(sel.Id, d))
+                    conflictDays.Add(d);
+
+            if (conflictDays.Count > 0)
+            {
+                MessageBox.Show($"Fahrzeug {sel.VehicleNumber} ist an folgenden Tagen bereits zugewiesen:\n" +
+                    string.Join(", ", conflictDays.Select(d => d.ToString("dd.MM.yyyy"))) + "\nBitte ein anderes Fahrzeug wählen.",
+                    "Fahrzeug nicht verfügbar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                continue;
+            }
+
+            // Driver check before committing the vehicle to the team.
+            var oldId = team.PreferredVehicleId;
             team.PreferredVehicleId = sel.Id;
+            if (!CheckTeamDriver(team, () => team.PreferredVehicleId = oldId))
+            {
+                team.PreferredVehicleId = oldId;
+                return;
+            }
+
+            // Commit: first the team link, then the appointment entries (attached to the team rows).
             _db.SaveTeam(team);
             for (var d = from; d <= until; d = d.AddDays(1))
-            {
-                if (!_db.IsVehicleAssigned(sel.Id, d))
-                    _db.SaveAssignment(new Assignment { ConstructionSiteId = siteId, VehicleId = sel.Id, Date = d });
-            }
+                LinkVehicleToTeamRow(siteId, team.Id, sel.Id, d);
+            return;
+        }
+    }
+
+    private Vehicle? PickVehicle(List<Vehicle> vehicles)
+    {
+        using var f = new Form();
+        f.Text = "Fahrzeug auswählen";
+        f.Size = new Size(420, 300);
+        f.StartPosition = FormStartPosition.CenterParent;
+        f.Font = Font;
+        f.Controls.Add(new Label { Text = "Fahrzeug wählen, das den Termin begleiten soll:", Dock = DockStyle.Top, Padding = new Padding(12, 12, 12, 6) });
+        var lb = new ListBox { Dock = DockStyle.Fill, DataSource = vehicles, DisplayMember = "ToString" };
+        var flow = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), Height = 44 };
+        var btnOk = new Button { Text = "OK", Width = 100, Height = 30 };
+        StyleButton(btnOk);
+        var btnCancel = new Button { Text = "Abbrechen", Width = 100, Height = 30 };
+        StyleButton(btnCancel);
+        Vehicle? sel = null;
+        btnOk.Click += (_, _) => { sel = lb.SelectedItem as Vehicle; f.Close(); };
+        btnCancel.Click += (_, _) => f.Close();
+        flow.Controls.AddRange(new Control[] { btnCancel, btnOk });
+        f.Controls.Add(lb); f.Controls.Add(flow);
+        f.ShowDialog();
+        return sel;
+    }
+
+    // Attaches the vehicle to the team's assignment row on a given day so the span bar groups
+    // team + vehicle together. Creates or updates the row as needed (only on days the vehicle is free).
+    private void LinkVehicleToTeamRow(int siteId, int teamId, int vehicleId, DateTime day)
+    {
+        if (_db.IsVehicleAssigned(vehicleId, day)) return;
+        var existing = _db.GetTeamAssignmentOnDay(teamId, day);
+        if (existing != null)
+        {
+            existing.VehicleId = vehicleId;
+            _db.SaveAssignment(existing);
+        }
+        else if (!_db.IsSiteAssigned(siteId, day) && !_db.IsTeamAssigned(teamId, day))
+        {
+            _db.SaveAssignment(new Assignment { ConstructionSiteId = siteId, TeamId = teamId, VehicleId = vehicleId, Date = day });
         }
     }
 
