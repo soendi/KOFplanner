@@ -7,9 +7,10 @@ public class SplashForm : Form
 {
     private readonly Image? _img;
     private readonly System.Windows.Forms.Timer _timer;
+    private readonly Size _baseSize;
     private int _elapsed;
-    private const int HoldMs = 900;
-    private const int FadeMs = 900;
+    private const int HoldMs = 350;
+    private const int FadeMs = 550;
 
     public SplashForm(int durationMs = 2500)
     {
@@ -34,10 +35,8 @@ public class SplashForm : Form
             _img = null;
         }
 
-        if (_img != null)
-            ClientSize = new Size(_img.Width / 2, _img.Height / 2);
-        else
-            ClientSize = new Size(400, 240);
+        _baseSize = _img != null ? new Size(_img.Width / 2, _img.Height / 2) : new Size(400, 240);
+        ClientSize = _baseSize;
 
         _timer = new System.Windows.Forms.Timer { Interval = 16 };
         _timer.Tick += OnTick;
@@ -58,7 +57,12 @@ public class SplashForm : Form
             return;
         }
 
-        Opacity = 1.0 - (double)t / FadeMs;
+        double p = (double)t / FadeMs;
+        double ease = p * p; // beschleunigt
+
+        double scale = 1.0 + ease * 5.0;
+        ClientSize = new Size((int)(_baseSize.Width * scale), (int)(_baseSize.Height * scale));
+        Opacity = 1.0 - ease;
         Invalidate();
     }
 
@@ -73,18 +77,8 @@ public class SplashForm : Form
             return;
         }
 
-        double p = 0;
-        if (_elapsed > HoldMs)
-            p = Math.Min(1.0, (double)(_elapsed - HoldMs) / FadeMs);
-
-        double scale = 1.0 + p * 1.6;
-        int w = (int)(ClientSize.Width * scale);
-        int h = (int)(ClientSize.Height * scale);
-        int x = (ClientSize.Width - w) / 2;
-        int y = (ClientSize.Height - h) / 2;
-
         e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-        e.Graphics.DrawImage(_img, x, y, w, h);
+        e.Graphics.DrawImage(_img, ClientRectangle);
     }
 
     protected override void Dispose(bool disposing)
