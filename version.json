@@ -1,4 +1,4 @@
 {
-  "version": "1.1.29.0",
-  "notes": "2-Monatsansicht durchgehend (kein Bruchpunkt); Termine laufen ueber Wochen-/Monatsgrenzen; Vormonat/Folgemonat hellblau; Baustelle markieren -> zugeordnete MA informieren; Heimatadresse in Einstellungen; Fahrdistanz/-zeit (OSM) je Baustelle automatisch ermittelt"
+  "version": "1.1.30.0",
+  "notes": "Einstellungen-Fenster vergroessert (alle Felder inkl. Heimatadresse sichtbar, groessenveraenderbar/scrollbar)"
 }

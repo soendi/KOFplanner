@@ -17,10 +17,12 @@ public class SettingsForm : Form
 
         Text = "Einstellungen";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(460, 440);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        Size = new Size(480, 560);
+        MinimumSize = new Size(480, 420);
+        FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
         MinimizeBox = false;
+        AutoScroll = true;
 
         var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 11, Padding = new Padding(12) };
         for (int i = 0; i < 7; i++) tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
