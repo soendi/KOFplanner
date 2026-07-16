@@ -232,6 +232,11 @@ public class MainForm : Form
         {
             if (_lvVehicles.GetItemAt(e.X, e.Y)?.Tag is Vehicle v) EditVehicle(v);
         };
+        _lvVehicles.ItemDrag += (_, e) =>
+        {
+            if (_lvVehicles.SelectedItems.Count > 0 && _lvVehicles.SelectedItems[0].Tag is Vehicle v)
+                _lvVehicles.DoDragDrop(v, DragDropEffects.Move);
+        };
         colVeh.Controls.Add(_lvVehicles);
         colVeh.Controls.Add(vehHeader);
         t2Grid.Controls.Add(colVeh, 2, 0);
