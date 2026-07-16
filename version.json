@@ -1,4 +1,4 @@
 {
-  "version": "1.1.39.0",
-  "notes": "Abgelaufene Baustellen: nur EINE Sammel-Abfrage fuer alle (Enddatum > 1 Woche her), samt Kalendereintraegen loeschen"
+  "version": "1.1.40.0",
+  "notes": "Baustelle bearbeiten: Name- und Adressfelder werden mit den aktuellen Daten gefuellt (keine leere Maske)"
 }

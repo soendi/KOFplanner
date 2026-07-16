@@ -27,11 +27,11 @@ public class SiteForm : Form
 
         var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(10), RowCount = 6 };
         tlp.Controls.Add(new Label { Text = "Name:", Anchor = AnchorStyles.Left }, 0, 0);
-        _txtName = new TextBox { Dock = DockStyle.Fill };
+        _txtName = new TextBox { Dock = DockStyle.Fill, Text = site?.Name ?? "" };
         tlp.Controls.Add(_txtName, 1, 0);
 
         tlp.Controls.Add(new Label { Text = "Adresse:", Anchor = AnchorStyles.Left }, 0, 1);
-        _txtAddress = new TextBox { Dock = DockStyle.Fill };
+        _txtAddress = new TextBox { Dock = DockStyle.Fill, Text = site?.Address ?? "" };
         tlp.Controls.Add(_txtAddress, 1, 1);
 
         tlp.Controls.Add(new Label { Text = "Startdatum:", Anchor = AnchorStyles.Left }, 0, 2);
