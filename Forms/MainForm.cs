@@ -1607,7 +1607,10 @@ public class MainForm : Form
             var affected = _teams.Where(t => t.Members.Any(m => m.Id == emp.Id)).ToList();
             foreach (var team in affected)
             {
+                var snapshot = team.Members.ToList();
                 team.Members.RemoveAll(m => m.Id == emp.Id);
+                if (!CheckTeamDriver(team, () => team.Members = snapshot))
+                    team.Members = snapshot;
                 _db.SaveTeam(team);
             }
             MessageBox.Show($"{kind} für {emp.FullName} eingetragen.\nMitarbeiter aus {affected.Count} Team(s) entfernt.", kind);
@@ -1691,7 +1694,7 @@ public class MainForm : Form
 
     private void EditTeam(Team? t)
     {
-        using var f = new TeamForm(_db, t, _employees); if (f.ShowDialog() == DialogResult.OK) RefreshAllData();
+        using var f = new TeamForm(_db, t, _employees, CheckTeamDriver); if (f.ShowDialog() == DialogResult.OK) RefreshAllData();
     }
 
     private void DeleteTeam(Team t)
@@ -1711,15 +1714,43 @@ public class MainForm : Form
         { _db.DeleteVehicle(v.Id); RefreshAllData(); }
     }
 
+    // Ensures that at least one team member can drive the assigned vehicle after a change.
+    // If the change would leave no driver, the user is asked how to proceed.
+    // rollback restores the previous state; returns true if the (possibly corrected) change stands.
+    private bool CheckTeamDriver(Team team, Action rollback)
+    {
+        if (!team.PreferredVehicleId.HasValue) return true;
+        var veh = _vehicles.FirstOrDefault(v => v.Id == team.PreferredVehicleId.Value);
+        if (veh == null) { team.PreferredVehicleId = null; return true; }
+        var hasDriver = team.Members.Any(m => m.HasDriversLicense && m.GetLicenseList().Contains(veh.RequiredLicense));
+        if (hasDriver) return true;
+
+        var resolution = DriverConflict.Show(team.Name, veh, this);
+        switch (resolution)
+        {
+            case DriverResolution.ClearVehicle:
+                team.PreferredVehicleId = null;
+                return true;
+            case DriverResolution.ChangeVehicle:
+                var replacement = DriverConflict.PickVehicle(_vehicles, veh, this);
+                if (replacement == null) { rollback(); return false; }
+                team.PreferredVehicleId = replacement.Id;
+                return true;
+            default: // CancelChange
+                rollback();
+                return false;
+        }
+    }
+
     private void AssignVehicleToTeam(Team team, Vehicle veh)
     {
-        var canDrive = team.Members.Any(m => m.HasDriversLicense && m.GetLicenseList().Contains(veh.RequiredLicense));
-        if (!canDrive)
-        {
-            if (MessageBox.Show($"Kein Teammitglied kann {veh.RequiredLicense} fahren.\nTrotzdem zuweisen?", "Warnung",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-        }
+        var oldId = team.PreferredVehicleId;
         team.PreferredVehicleId = veh.Id;
+        if (!CheckTeamDriver(team, () => team.PreferredVehicleId = oldId))
+        {
+            RefreshTeamView();
+            return;
+        }
         _db.SaveTeam(team);
         MessageBox.Show($"Fahrzeug {veh.VehicleNumber} dem Team {team.Name} zugewiesen.");
         RefreshTeamView();
@@ -1909,7 +1940,7 @@ public class MainForm : Form
                     }
                     if (dlg.Choice == RemoveMemberChoice.KeepAndChangeVehicle)
                     {
-                        var replacement = PickVehicle(veh);
+                        var replacement = DriverConflict.PickVehicle(_vehicles, veh, this);
                         team.Members.Remove(member);
                         team.PreferredVehicleId = replacement?.Id;
                         _db.SaveTeam(team);
@@ -1922,30 +1953,6 @@ public class MainForm : Form
         team.Members.Remove(member);
         _db.SaveTeam(team);
         RefreshAllData();
-    }
-
-    private Vehicle? PickVehicle(Vehicle? exclude)
-    {
-        using var f = new Form
-        {
-            Text = "Ersatzfahrzeug wählen",
-            Size = new Size(360, 220),
-            StartPosition = FormStartPosition.CenterParent,
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false
-        };
-        var cmb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Left = 20, Top = 30, Width = 300 };
-        foreach (var v in _vehicles.Where(v => exclude == null || v.Id != exclude.Id).OrderBy(v => v.VehicleNumber))
-            cmb.Items.Add(v);
-        cmb.DisplayMember = "VehicleNumber";
-        if (cmb.Items.Count > 0) cmb.SelectedIndex = 0;
-        var ok = new Button { Text = "OK", Left = 20, Top = 130, Width = 120, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Abbrechen", Left = 160, Top = 130, Width = 120, DialogResult = DialogResult.Cancel };
-        f.Controls.AddRange(new Control[] { cmb, ok, cancel });
-        f.AcceptButton = ok;
-        f.CancelButton = cancel;
-        return f.ShowDialog(this) == DialogResult.OK && cmb.SelectedItem is Vehicle sel ? sel : null;
     }
 
     // ====== VAC/SICK CONFLICT CHECK ======

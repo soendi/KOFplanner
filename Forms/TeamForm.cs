@@ -9,11 +9,16 @@ public class TeamForm : Form
     private readonly Team _team;
     private readonly TextBox _txtName;
     private readonly ListBox _lbAvailable, _lbMembers;
+    private readonly Func<Team, Action, bool>? _ensureDriver;
 
     public TeamForm(DatabaseService db, Team? team, List<Employee> allEmployees)
+        : this(db, team, allEmployees, null) { }
+
+    public TeamForm(DatabaseService db, Team? team, List<Employee> allEmployees, Func<Team, Action, bool>? ensureDriver)
     {
         _db = db;
         _team = team ?? new Team { Name = "" };
+        _ensureDriver = ensureDriver;
         Text = team == null ? "Neues Team" : "Team bearbeiten";
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(600, 450);
@@ -97,8 +102,25 @@ public class TeamForm : Form
             DialogResult = DialogResult.None;
             return;
         }
+        var originalMembers = _team.Members.ToList();
+        var originalVehicle = _team.PreferredVehicleId;
         _team.Name = _txtName.Text.Trim();
         _team.Members = _lbMembers.Items.Cast<Employee>().ToList();
+        if (_ensureDriver != null)
+        {
+            var ok = _ensureDriver(_team, () =>
+            {
+                _team.Members = originalMembers;
+                _team.PreferredVehicleId = originalVehicle;
+            });
+            if (!ok)
+            {
+                _team.Members = originalMembers;
+                _team.PreferredVehicleId = originalVehicle;
+                DialogResult = DialogResult.None;
+                return;
+            }
+        }
         _db.SaveTeam(_team);
     }
 }
