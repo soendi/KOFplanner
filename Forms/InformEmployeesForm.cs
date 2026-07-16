@@ -167,16 +167,21 @@ public class InformEmployeesForm : UserControl
         }
     }
 
-    // Collects the distinct employees for the chosen range + selected sites/teams/employees.
+    // Collects the distinct employees for the chosen range across ALL three categories
+    // (Baustelle, Team, Mitarbeiter) as a deduplicated union.
     private List<Employee> CollectEmployees(out List<Assignment> filtered, out DateTime from, out DateTime until)
     {
         from = _dtpFrom.Value.Date;
         until = _dtpUntil.Value.Date;
         var sites = SelectedTags(_lstSites).Cast<ConstructionSite>().Select(s => s.Id).ToHashSet();
         var teams = SelectedTags(_lstTeams).Cast<Team>().Select(t => t.Id).ToHashSet();
+        var selectedEmps = SelectedTags(_lstEmployees).Cast<Employee>().Select(e => e.Id).ToHashSet();
 
         var all = _db.GetAllAssignments(from, until);
-        filtered = all.Where(a =>
+
+        // Assignments that match the selected sites/teams. If nothing is selected in a
+        // category, that category does not restrict the result (all assignments qualify).
+        var matching = all.Where(a =>
             (sites.Count == 0 || sites.Contains(a.ConstructionSiteId)) &&
             (teams.Count == 0 || (a.TeamId.HasValue && teams.Contains(a.TeamId.Value))))
             .ToList();
@@ -185,7 +190,9 @@ public class InformEmployeesForm : UserControl
         var employees = _db.GetAllEmployees();
 
         var empIds = new HashSet<int>();
-        foreach (var a in filtered)
+
+        // 1) Employees from the matching assignments (team members + directly assigned employees).
+        foreach (var a in matching)
         {
             if (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var members))
                 foreach (var m in members) empIds.Add(m.Id);
@@ -193,21 +200,27 @@ public class InformEmployeesForm : UserControl
                 empIds.Add(a.EmployeeId.Value);
         }
 
-        // Explicitly selected employees: only restrict the result when at least one is selected.
-        // If none are selected, the employee list is not used as a filter.
-        if (_lstEmployees.SelectedItems.Count > 0)
+        // 2) Explicitly selected employees (union, not a filter): include them when they
+        //    actually have an assignment somewhere in the period, so the report has content.
+        if (selectedEmps.Count > 0)
         {
-            var explicitEmps = SelectedTags(_lstEmployees).Cast<Employee>().Select(e => e.Id).ToHashSet();
-            empIds = empIds.Intersect(explicitEmps).ToHashSet();
+            var assignedInPeriod = new HashSet<int>(
+                all.Select(a => a.EmployeeId).Where(id => id.HasValue).Select(id => id.Value)
+                    .Concat(all.Where(a => a.TeamId.HasValue && teamMembers.ContainsKey(a.TeamId.Value))
+                                .SelectMany(a => teamMembers[a.TeamId.Value].Select(m => m.Id))));
+            foreach (var id in selectedEmps)
+                if (assignedInPeriod.Contains(id)) empIds.Add(id);
         }
 
-        // Resolve distinct employees (dedup is inherent via the HashSet of ids).
+        filtered = matching;
+        // Resolve distinct employees; dedup is inherent via the HashSet of ids.
         return employees.Where(e => empIds.Contains(e.Id)).OrderBy(e => e.LastName).ThenBy(e => e.FirstName).ToList();
     }
 
     private void Inform()
     {
         var emps = CollectEmployees(out var filtered, out var from, out var until);
+        Log($"{emps.Count} Mitarbeiter im Zeitraum {from:dd.MM.yyyy} – {until:dd.MM.yyyy} gefunden.");
         if (emps.Count == 0) { Log("Keine zugewiesenen Mitarbeiter im Zeitraum gefunden."); return; }
 
         using var preview = new InformPreviewForm(emps);
