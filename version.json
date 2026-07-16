@@ -1,4 +1,4 @@
 {
-  "version": "1.1.25.0",
-  "notes": "Tab 'Mitarbeiter informieren': ein Button 'Infos verschicken' mit Vorschau-Dialog (pro Person E-Mail/Druck wählbar, je nach hinterlegter Adresse/Papier-Präferenz)"
+  "version": "1.1.26.0",
+  "notes": "Bugfix 'Infos verschicken': Team-Mitglieder werden jetzt korrekt ermittelt (keine Personen-Filter-Logik beim nicht ausgewählten Mitarbeiter-Listen)"
 }

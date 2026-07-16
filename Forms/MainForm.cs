@@ -1850,7 +1850,18 @@ public class MainForm : Form
             return;
         }
         _db.SaveTeam(team);
-        MessageBox.Show($"Fahrzeug {veh.VehicleNumber} dem Team {team.Name} zugewiesen.");
+        var assigned = team.PreferredVehicleId;
+        if (assigned.HasValue)
+        {
+            var assignedVeh = _vehicles.FirstOrDefault(v => v.Id == assigned.Value);
+            var num = assignedVeh?.VehicleNumber ?? veh.VehicleNumber;
+            var note = assigned.Value == veh.Id ? "" : $"\n(Hinweis: stattdessen Fahrzeug {num} zugewiesen.)";
+            MessageBox.Show($"Fahrzeug {num} dem Team {team.Name} zugewiesen.{note}");
+        }
+        else
+        {
+            MessageBox.Show($"Fahrzeugzuweisung für Team {team.Name} entfernt – keines der Mitglieder darf das gewählte Fahrzeug führen.");
+        }
         RefreshTeamView();
     }
 

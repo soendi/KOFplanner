@@ -156,13 +156,13 @@ public class InformEmployeesForm : UserControl
                 empIds.Add(a.EmployeeId.Value);
         }
 
-        // Explicitly selected employees: if all are selected, add them all; otherwise intersect.
-        var allEmpsChecked = _lstEmployees.Items.Count == 0 || _lstEmployees.SelectedItems.Count == _lstEmployees.Items.Count;
-        var explicitEmps = SelectedTags(_lstEmployees).Cast<Employee>().Select(e => e.Id).ToHashSet();
-        if (allEmpsChecked)
-            empIds.UnionWith(explicitEmps);
-        else
+        // Explicitly selected employees: only restrict the result when at least one is selected.
+        // If none are selected, the employee list is not used as a filter.
+        if (_lstEmployees.SelectedItems.Count > 0)
+        {
+            var explicitEmps = SelectedTags(_lstEmployees).Cast<Employee>().Select(e => e.Id).ToHashSet();
             empIds = empIds.Intersect(explicitEmps).ToHashSet();
+        }
 
         // Resolve distinct employees (dedup is inherent via the HashSet of ids).
         return employees.Where(e => empIds.Contains(e.Id)).OrderBy(e => e.LastName).ThenBy(e => e.FirstName).ToList();
