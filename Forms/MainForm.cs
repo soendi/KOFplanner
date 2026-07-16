@@ -787,27 +787,49 @@ public class MainForm : Form
         _spanAssignmentIds.Clear();
         var groups = _monthAssignments
             .GroupBy(SpanKey)
-            .Where(g => g.Min(a => a.Date.Date) != g.Max(a => a.Date.Date))
             .ToList();
         foreach (var g in groups)
         {
-            var min = g.Min(a => a.Date.Date);
-            var max = g.Max(a => a.Date.Date);
-            var sample = g.OrderBy(a => a.Date).First();
-            _spans.Add(new CalendarSpan
+            // Merge only truly contiguous days; gaps (days without an assignment)
+            // must NOT be filled with the same entry -> split into separate runs.
+            var days = g.Select(a => a.Date.Date).Distinct().OrderBy(d => d).ToList();
+            var runStart = days[0];
+            var prev = days[0];
+            Assignment? sample = null;
+            foreach (var a in g) if (a.Date.Date == runStart) { sample = a; break; }
+            for (var i = 1; i < days.Count; i++)
             {
-                From = min,
-                To = max,
-                Label = SpanLabel(sample),
-                Fill = SpanFill(sample),
-                Border = SpanBorder(sample),
-                Text = SpanText(sample)
-            });
-            _multiDayKeys.Add(g.Key);
-            // Every assignment belonging to a multi-day group is drawn as one continuous
-            // span bar, so its individual per-day lines must be suppressed.
-            foreach (var a in g) _spanAssignmentIds.Add(a.Id);
+                if (days[i] != prev.AddDays(1))
+                {
+                    // close current run
+                    AddSpan(runStart, prev, sample ?? g.First());
+                    runStart = days[i];
+                    var s2 = g.FirstOrDefault(a => a.Date.Date == runStart) ?? sample;
+                    sample = s2;
+                }
+                prev = days[i];
+            }
+            AddSpan(runStart, prev, sample ?? g.First());
         }
+    }
+
+    private void AddSpan(DateTime from, DateTime to, Assignment sample)
+    {
+        if (from == to) return; // single-day entries are drawn per-row, not as spans
+        _spans.Add(new CalendarSpan
+        {
+            From = from,
+            To = to,
+            Label = SpanLabel(sample),
+            Fill = SpanFill(sample),
+            Border = SpanBorder(sample),
+            Text = SpanText(sample)
+        });
+        _multiDayKeys.Add(SpanKey(sample));
+        // Every assignment belonging to a multi-day run is drawn as one continuous
+        // span bar, so its individual per-day lines must be suppressed.
+        foreach (var a in _monthAssignments.Where(a => SpanKey(a) == SpanKey(sample) && a.Date.Date >= from.Date && a.Date.Date <= to.Date))
+            _spanAssignmentIds.Add(a.Id);
     }
 
     private string SpanLabel(Assignment a)
