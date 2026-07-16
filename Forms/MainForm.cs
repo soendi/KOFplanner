@@ -41,7 +41,7 @@ public class MainForm : Form
     private readonly Label _lblMonthYear;
 
         // Tab 2 controls (Employees, Teams, Vehicles)
-        private readonly ListBox _lbEmployees;
+        private readonly ListView _lvEmployees;
         private readonly FlowLayoutPanel _flowTeamCards;
         private readonly Panel _pnlNewTeamDropZone;
         private readonly ListView _lvVehicles;
@@ -165,14 +165,26 @@ public class MainForm : Form
         empHeader.Controls.Add(new Label { Text = "Mitarbeiter", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
         var empBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
         var btnEmpNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
-        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
-        var btnEmpDel = new Button { Text = "Löschen", Width = 100, Height = 28 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
+        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnEmpEdit.Click += (_, _) => { if (_lvEmployees.SelectedItems.Count > 0 && _lvEmployees.SelectedItems[0].Tag is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
+        var btnEmpDel = new Button { Text = "Löschen", Width = 100, Height = 28 }; btnEmpDel.Click += (_, _) => { if (_lvEmployees.SelectedItems.Count > 0 && _lvEmployees.SelectedItems[0].Tag is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
         empBtns.Controls.AddRange(new Control[] { btnEmpDel, btnEmpEdit, btnEmpNew });
         empHeader.Controls.Add(empBtns);
-        _lbEmployees = new ListBox { Dock = DockStyle.Fill, DisplayMember = "FullName" };
-        _lbEmployees.MouseDown += EmployeeList_MouseDown;
-        _lbEmployees.MouseDoubleClick += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); };
-        colEmp.Controls.Add(_lbEmployees);
+        _lvEmployees = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, MultiSelect = false, HeaderStyle = ColumnHeaderStyle.Nonclickable };
+        _lvEmployees.Columns.Add("Name", 160);
+        _lvEmployees.Columns.Add("Führerschein", 110);
+        _lvEmployees.Columns.Add("E-Mail", 160);
+        _lvEmployees.Columns.Add("Info", 200);
+        _lvEmployees.Resize += (_, _) => ResizeListColumns(_lvEmployees);
+        _lvEmployees.MouseDoubleClick += (_, e) =>
+        {
+            if (_lvEmployees.GetItemAt(e.X, e.Y)?.Tag is Employee emp) EditEmployee(emp);
+        };
+        _lvEmployees.ItemDrag += (_, _) =>
+        {
+            if (_lvEmployees.SelectedItems.Count > 0 && _lvEmployees.SelectedItems[0].Tag is Employee emp)
+                _lvEmployees.DoDragDrop(emp, DragDropEffects.Move);
+        };
+        colEmp.Controls.Add(_lvEmployees);
         colEmp.Controls.Add(empHeader);
         t2Grid.Controls.Add(colEmp, 0, 0);
 
@@ -307,7 +319,20 @@ public class MainForm : Form
         _vacations = _db.GetAllVacations();
         _sickness = _db.GetAllSickness();
 
-        _lbEmployees.DataSource = null; _lbEmployees.DataSource = _employees;
+        _lvEmployees.Items.Clear();
+        foreach (var e in _employees)
+        {
+            var item = new ListViewItem(new[]
+            {
+                e.FullName,
+                e.LicenseCategories,
+                e.Email,
+                e.ToString()
+            })
+            { Tag = e };
+            _lvEmployees.Items.Add(item);
+        }
+        ResizeListColumns(_lvEmployees);
         RefreshTeamView();
         RefreshVehicleList();
         RefreshSiteList();
@@ -1701,16 +1726,6 @@ public class MainForm : Form
     }
 
     // ====== TAB 2 DRAG & DROP ======
-    private void EmployeeList_MouseDown(object? sender, MouseEventArgs e)
-    {
-        var idx = _lbEmployees.IndexFromPoint(e.Location);
-        if (idx < 0 || idx >= _lbEmployees.Items.Count) return;
-        if (_lbEmployees.Items[idx] is Employee dragEmp && e.Button == MouseButtons.Left)
-        {
-            _lbEmployees.SelectedIndex = idx;
-            _lbEmployees.DoDragDrop(dragEmp, DragDropEffects.Move);
-        }
-    }
 
     private void CreateTeamFromEmployee(Employee emp)
     {
@@ -1818,16 +1833,10 @@ public class MainForm : Form
             }
         };
 
-        card.MouseClick += (s, e) =>
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                _selectedTeam = team;
-                RefreshTeamView();
-            }
-            else if (e.Button == MouseButtons.Right)
-                ShowTeamContextMenu(team, card.PointToScreen(e.Location));
-        };
+        card.MouseClick += (s, e) => TeamCard_MouseClick(team, card, e);
+        // Forward clicks from child controls (labels/buttons) so the whole tile reacts.
+        foreach (Control child in card.Controls)
+            child.MouseClick += (s, e) => TeamCard_MouseClick(team, card, e);
 
         card.Paint += (s, pe) =>
         {
@@ -1842,18 +1851,24 @@ public class MainForm : Form
         return card;
     }
 
+    private void TeamCard_MouseClick(Team team, Panel card, MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left)
+        {
+            _selectedTeam = team;
+            RefreshTeamView();
+        }
+        else if (e.Button == MouseButtons.Right)
+            ShowTeamContextMenu(team, card.PointToScreen(e.Location));
+    }
+
     private void ShowTeamContextMenu(Team team, Point screenPos)
     {
         var cm = new ContextMenuStrip();
         foreach (var m in team.Members.ToList())
         {
             var item = cm.Items.Add($"Entfernen: {m.FullName}");
-            item.Click += (_, _) =>
-            {
-                team.Members.Remove(m);
-                _db.SaveTeam(team);
-                RefreshAllData();
-            };
+            item.Click += (_, _) => RemoveTeamMember(team, m);
         }
         if (team.Members.Count > 0)
             cm.Items.Add(new ToolStripSeparator());
@@ -1865,6 +1880,72 @@ public class MainForm : Form
             RefreshTeamView();
         };
         cm.Show(screenPos);
+    }
+
+    private void RemoveTeamMember(Team team, Employee member)
+    {
+        // If a preferred vehicle is assigned, check whether the remaining members can drive it.
+        if (team.PreferredVehicleId.HasValue)
+        {
+            var veh = _vehicles.FirstOrDefault(v => v.Id == team.PreferredVehicleId.Value);
+            if (veh != null)
+            {
+                var remaining = team.Members.Where(m => m.Id != member.Id).ToList();
+                var driverStays = remaining.Any(m => m.HasDriversLicense && m.GetLicenseList().Contains(veh.RequiredLicense));
+                var removedCouldDrive = member.HasDriversLicense && member.GetLicenseList().Contains(veh.RequiredLicense);
+                if (!driverStays && removedCouldDrive)
+                {
+                    using var dlg = new RemoveMemberDialog(team.Name, member.FullName, veh, _vehicles);
+                    var result = dlg.ShowDialog(this);
+                    if (result == DialogResult.Cancel)
+                        return; // Mitglied nicht entfernen
+                    if (dlg.Choice == RemoveMemberChoice.KeepAndClearVehicle)
+                    {
+                        team.Members.Remove(member);
+                        team.PreferredVehicleId = null;
+                        _db.SaveTeam(team);
+                        RefreshAllData();
+                        return;
+                    }
+                    if (dlg.Choice == RemoveMemberChoice.KeepAndChangeVehicle)
+                    {
+                        var replacement = PickVehicle(veh);
+                        team.Members.Remove(member);
+                        team.PreferredVehicleId = replacement?.Id;
+                        _db.SaveTeam(team);
+                        RefreshAllData();
+                        return;
+                    }
+                }
+            }
+        }
+        team.Members.Remove(member);
+        _db.SaveTeam(team);
+        RefreshAllData();
+    }
+
+    private Vehicle? PickVehicle(Vehicle? exclude)
+    {
+        using var f = new Form
+        {
+            Text = "Ersatzfahrzeug wählen",
+            Size = new Size(360, 220),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false
+        };
+        var cmb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Left = 20, Top = 30, Width = 300 };
+        foreach (var v in _vehicles.Where(v => exclude == null || v.Id != exclude.Id).OrderBy(v => v.VehicleNumber))
+            cmb.Items.Add(v);
+        cmb.DisplayMember = "VehicleNumber";
+        if (cmb.Items.Count > 0) cmb.SelectedIndex = 0;
+        var ok = new Button { Text = "OK", Left = 20, Top = 130, Width = 120, DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = "Abbrechen", Left = 160, Top = 130, Width = 120, DialogResult = DialogResult.Cancel };
+        f.Controls.AddRange(new Control[] { cmb, ok, cancel });
+        f.AcceptButton = ok;
+        f.CancelButton = cancel;
+        return f.ShowDialog(this) == DialogResult.OK && cmb.SelectedItem is Vehicle sel ? sel : null;
     }
 
     // ====== VAC/SICK CONFLICT CHECK ======
