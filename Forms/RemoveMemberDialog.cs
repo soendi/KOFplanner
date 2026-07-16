@@ -16,29 +16,40 @@ internal sealed class RemoveMemberDialog : Form
     public RemoveMemberDialog(string teamName, string memberName, Vehicle vehicle, List<Vehicle> vehicles)
     {
         Text = "Teammitglied entfernen";
-        Size = new Size(420, 240);
+        Size = new Size(460, 320);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
-        Padding = new Padding(12);
+        Font = new Font("Segoe UI", 9.5f);
 
         var msg = new Label
         {
-            Left = 12, Top = 12, Width = 384, Height = 80,
+            Dock = DockStyle.Top,
+            Padding = new Padding(12, 12, 12, 6),
+            Height = 110,
             Text = $"{memberName} ist das einzige Teammitglied von \"{teamName}\", das das zugewiesene Fahrzeug\n{vehicle.VehicleNumber} ({vehicle.RequiredLicense}) führen darf.\n\nWas soll beim Entfernen geschehen?"
         };
         Controls.Add(msg);
 
-        var btnKeep = new Button { Text = "Mitglied nicht entfernen", Left = 12, Top = 150, Width = 384, Height = 28 };
-        var btnClear = new Button { Text = "Mitglied entfernen und Fahrzeug entfernen", Left = 12, Top = 184, Width = 384, Height = 28 };
-        var btnChange = new Button { Text = "Mitglied entfernen und Fahrzeug wechseln", Left = 12, Top = 218, Width = 384, Height = 28 };
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(12, 0, 12, 12),
+            Height = 150
+        };
+        var btnKeep = new Button { Text = "Mitglied nicht entfernen", Width = 416, Height = 34 };
+        var btnClear = new Button { Text = "Mitglied entfernen und Fahrzeug entfernen", Width = 416, Height = 34 };
+        var btnChange = new Button { Text = "Mitglied entfernen und Fahrzeug wechseln", Width = 416, Height = 34 };
 
         btnKeep.Click += (_, _) => { Choice = RemoveMemberChoice.Cancel; DialogResult = DialogResult.Cancel; };
         btnClear.Click += (_, _) => { Choice = RemoveMemberChoice.KeepAndClearVehicle; DialogResult = DialogResult.OK; };
         btnChange.Click += (_, _) => { Choice = RemoveMemberChoice.KeepAndChangeVehicle; DialogResult = DialogResult.OK; };
 
-        Controls.AddRange(new Control[] { btnKeep, btnClear, btnChange });
+        flow.Controls.AddRange(new Control[] { btnKeep, btnClear, btnChange });
+        Controls.Add(flow);
         CancelButton = btnKeep;
     }
 }

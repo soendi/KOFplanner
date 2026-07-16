@@ -19,30 +19,41 @@ internal static class DriverConflict
         using var dlg = new Form
         {
             Text = "Kein Fahrer fürs Fahrzeug",
-            Size = new Size(440, 260),
+            Size = new Size(460, 320),
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false,
             MinimizeBox = false,
-            Padding = new Padding(12)
+            Font = new Font("Segoe UI", 9.5f)
         };
 
         var msg = new Label
         {
-            Left = 12, Top = 12, Width = 404, Height = 90,
+            Dock = DockStyle.Top,
+            Padding = new Padding(12, 12, 12, 6),
+            Height = 110,
             Text = $"Nach der Änderung kann kein Mitglied von Team \"{teamName}\" das zugewiesene Fahrzeug\n{veh.VehicleNumber} ({veh.RequiredLicense}) führen.\n\nMindestens ein Teammitglied muss das Fahrzeug lenken dürfen.\nWie soll fortgefahren werden?"
         };
         dlg.Controls.Add(msg);
 
-        var btnCancel = new Button { Text = "Änderung rückgängig", Left = 12, Top = 170, Width = 404, Height = 28, DialogResult = DialogResult.Cancel };
-        var btnClear = new Button { Text = "Fahrzeugzuweisung entfernen", Left = 12, Top = 204, Width = 404, Height = 28 };
-        var btnChange = new Button { Text = "Anderes Fahrzeug wählen", Left = 12, Top = 238, Width = 404, Height = 28 };
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(12, 0, 12, 12),
+            Height = 150
+        };
+        var btnCancel = new Button { Text = "Änderung rückgängig", Width = 416, Height = 34, DialogResult = DialogResult.Cancel };
+        var btnClear = new Button { Text = "Fahrzeugzuweisung entfernen", Width = 416, Height = 34 };
+        var btnChange = new Button { Text = "Anderes Fahrzeug wählen", Width = 416, Height = 34 };
 
         var resolution = (DriverResolution?)null;
         btnClear.Click += (_, _) => { resolution = DriverResolution.ClearVehicle; dlg.DialogResult = DialogResult.OK; };
         btnChange.Click += (_, _) => { resolution = DriverResolution.ChangeVehicle; dlg.DialogResult = DialogResult.OK; };
 
-        dlg.Controls.AddRange(new Control[] { btnCancel, btnClear, btnChange });
+        flow.Controls.AddRange(new Control[] { btnCancel, btnClear, btnChange });
+        dlg.Controls.Add(flow);
         dlg.CancelButton = btnCancel;
         return dlg.ShowDialog(owner) == DialogResult.OK ? resolution : DriverResolution.CancelChange;
     }
@@ -52,11 +63,12 @@ internal static class DriverConflict
         using var f = new Form
         {
             Text = "Ersatzfahrzeug wählen",
-            Size = new Size(360, 220),
+            Size = new Size(360, 240),
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false,
-            MinimizeBox = false
+            MinimizeBox = false,
+            Font = new Font("Segoe UI", 9.5f)
         };
         var cmb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Left = 20, Top = 30, Width = 300 };
         foreach (var v in vehicles.Where(v => exclude == null || v.Id != exclude.Id).OrderBy(v => v.VehicleNumber))
