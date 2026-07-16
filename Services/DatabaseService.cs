@@ -796,6 +796,27 @@ public class DatabaseService
         return (long)cmd.ExecuteScalar()! > 0;
     }
 
+    // True only if an assignment with the SAME site, team, vehicle AND employee already
+    // exists on that day. A separate (e.g. overlapping/longer) assignment with a different
+    // team or employee is allowed and must NOT be suppressed.
+    public bool IsDuplicateAssignment(int siteId, int? teamId, int? vehicleId, int? employeeId, DateTime date)
+    {
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COUNT(*) FROM Assignments
+            WHERE ConstructionSiteId=@sid AND Date=@d
+              AND (TeamId IS NULL OR TeamId=@tid)
+              AND (VehicleId IS NULL OR VehicleId=@vid)
+              AND (EmployeeId IS NULL OR EmployeeId=@eid)";
+        cmd.Parameters.AddWithValue("@sid", siteId);
+        cmd.Parameters.AddWithValue("@d", date.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("@tid", (object?)teamId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@vid", (object?)vehicleId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@eid", (object?)employeeId ?? DBNull.Value);
+        return (long)cmd.ExecuteScalar()! > 0;
+    }
+
     public List<int> GetEmployeeTeamIds(int employeeId)
     {
         var list = new List<int>();

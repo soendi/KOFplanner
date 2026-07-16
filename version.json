@@ -1,4 +1,4 @@
 {
-  "version": "1.1.34.0",
-  "notes": "Gezoomte Tag-Kachel (Shift+Hover) zeigt nun die pro Tag eingetragenen Termine (inkl. durchgehende Mehr-Tages-Termin-Eintraege)"
+  "version": "1.1.35.0",
+  "notes": "Bugfix: ueberschneidende Termine (z.B. 08-24 + 14-16) wurden beim Anlegen unterdrueckt -> Luecken im durchgehenden Termin; nur noch echte Duplikate (gleiche Baustelle/Team/MA/Fahrzeug) werden uebersprungen"
 }

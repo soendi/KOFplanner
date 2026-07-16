@@ -1669,7 +1669,7 @@ public class MainForm : Form
         {
             for (var d = from; d <= until; d = d.AddDays(1))
             {
-                if (!_db.IsSiteAssigned(site.Id, d) && !_db.IsTeamAssigned(team.Id, d))
+                if (!_db.IsDuplicateAssignment(site.Id, team.Id, null, null, d))
                     _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, TeamId = team.Id, Date = d });
             }
             CheckAutoVehicleAssignment(team, site.Id, from, until);
@@ -1681,7 +1681,7 @@ public class MainForm : Form
             {
                 for (var d = from; d <= until; d = d.AddDays(1))
                 {
-                    if (!_db.IsEmployeeOnVacationOrSick(emp.Id, d) && !_db.IsEmployeeAssigned(emp.Id, d))
+                    if (!_db.IsEmployeeOnVacationOrSick(emp.Id, d) && !_db.IsDuplicateAssignment(site.Id, null, null, emp.Id, d))
                         _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, EmployeeId = emp.Id, Date = d });
                 }
             }
@@ -1803,7 +1803,7 @@ public class MainForm : Form
         if (site == null) return;
 
         for (var d = from; d <= until; d = d.AddDays(1))
-            if (!_db.IsSiteAssigned(site.Id, d) && !_db.IsTeamAssigned(team.Id, d))
+            if (!_db.IsDuplicateAssignment(site.Id, team.Id, null, null, d))
                 _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, TeamId = team.Id, Date = d });
 
         CheckAutoVehicleAssignment(team, site.Id, from, until);
@@ -1824,7 +1824,7 @@ public class MainForm : Form
                 MessageBox.Show($"{emp.FullName} ist am {d:dd.MM.yyyy} nicht verfügbar.", "Konflikt");
                 continue;
             }
-            if (!_db.IsEmployeeAssigned(emp.Id, d))
+            if (!_db.IsDuplicateAssignment(site.Id, null, null, emp.Id, d))
                 _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, EmployeeId = emp.Id, Date = d });
         }
         RefreshCalendar();
