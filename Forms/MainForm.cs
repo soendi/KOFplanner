@@ -1694,7 +1694,7 @@ public class MainForm : Form
 
     private void EditTeam(Team? t)
     {
-        using var f = new TeamForm(_db, t, _employees, CheckTeamDriver); if (f.ShowDialog() == DialogResult.OK) RefreshAllData();
+        using var f = new TeamForm(_db, t, _employees, _vehicles, CheckTeamDriver); if (f.ShowDialog() == DialogResult.OK) RefreshAllData();
     }
 
     private void DeleteTeam(Team t)
