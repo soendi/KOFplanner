@@ -373,9 +373,13 @@ public class DatabaseService
     {
         using var conn = GetConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM ConstructionSites WHERE Id=@id";
+        cmd.CommandText = "DELETE FROM Assignments WHERE ConstructionSiteId=@id";
         cmd.Parameters.AddWithValue("@id", id);
         cmd.ExecuteNonQuery();
+        using var cmd2 = conn.CreateCommand();
+        cmd2.CommandText = "DELETE FROM ConstructionSites WHERE Id=@id";
+        cmd2.Parameters.AddWithValue("@id", id);
+        cmd2.ExecuteNonQuery();
     }
 
     // --- Assignments ---
