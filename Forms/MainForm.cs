@@ -165,9 +165,8 @@ public class MainForm : Form
         empHeader.Controls.Add(new Label { Text = "Mitarbeiter", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
         var empBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
         var btnEmpNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
-        var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnEmpEdit.Click += (_, _) => { if (_lvEmployees.SelectedItems.Count > 0 && _lvEmployees.SelectedItems[0].Tag is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
         var btnEmpDel = new Button { Text = "Löschen", Width = 100, Height = 28 }; btnEmpDel.Click += (_, _) => { if (_lvEmployees.SelectedItems.Count > 0 && _lvEmployees.SelectedItems[0].Tag is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
-        empBtns.Controls.AddRange(new Control[] { btnEmpDel, btnEmpEdit, btnEmpNew });
+        empBtns.Controls.AddRange(new Control[] { btnEmpDel, btnEmpNew });
         empHeader.Controls.Add(empBtns);
         _lvEmployees = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, MultiSelect = false, HeaderStyle = ColumnHeaderStyle.Nonclickable };
         _lvEmployees.Columns.Add("Name", 160);
