@@ -153,10 +153,10 @@ public class MainForm : Form
         var empBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
         var btnEmpNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
         var btnEmpEdit = new Button { Text = "Bearbeiten", Width = 100, Height = 28 }; btnEmpEdit.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); }; StyleButton(btnEmpEdit);
-        empBtns.Controls.AddRange(new Control[] { btnEmpEdit, btnEmpNew });
+        var btnEmpDel = new Button { Text = "Löschen", Width = 100, Height = 28 }; btnEmpDel.Click += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
+        empBtns.Controls.AddRange(new Control[] { btnEmpDel, btnEmpEdit, btnEmpNew });
         empHeader.Controls.Add(empBtns);
-        _lbEmployees = new ListBox { Dock = DockStyle.Fill, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 40 };
-        _lbEmployees.DrawItem += EmployeeList_DrawItem;
+        _lbEmployees = new ListBox { Dock = DockStyle.Fill, DisplayMember = "FullName" };
         _lbEmployees.MouseDown += EmployeeList_MouseDown;
         _lbEmployees.MouseDoubleClick += (_, _) => { if (_lbEmployees.SelectedItem is Employee e) EditEmployee(e); };
         colEmp.Controls.Add(_lbEmployees);
@@ -267,6 +267,7 @@ public class MainForm : Form
         RefreshTeamView();
         RefreshVehicleList();
         RefreshSiteList();
+        RefreshCalendar();
     }
 
     private void RefreshVehicleList()
@@ -351,36 +352,6 @@ public class MainForm : Form
         var lum = (0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B) / 255.0;
         return lum > 0.6 ? Color.Black : Color.White;
     }
-
-    private void EmployeeList_DrawItem(object? sender, DrawItemEventArgs e)
-    {
-        if (sender is not ListBox lb) return;
-        e.DrawBackground();
-        if (e.Index < 0 || e.Index >= lb.Items.Count) return;
-        if (lb.Items[e.Index] is not Employee emp) return;
-        var name = emp.FullName;
-        var lic = emp.GetLicenseList().Length > 0
-            ? "FS: " + string.Join(", ", emp.GetLicenseList())
-            : "kein Führerschein";
-        using var nameFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-        using var licFont = new Font("Segoe UI", 8f);
-        using var nameBrush = new SolidBrush(e.ForeColor);
-        using var licBrush = new SolidBrush((e.State & DrawItemState.Selected) == DrawItemState.Selected
-            ? Color.White : Color.FromArgb(0x66, 0x66, 0x66));
-        e.Graphics.DrawString(name, nameFont, nameBrush, e.Bounds.Left + 5, e.Bounds.Top + 4);
-        e.Graphics.DrawString(lic, licFont, licBrush, e.Bounds.Left + 5, e.Bounds.Top + 22);
-        // Red X delete button on the right
-        var xRect = new Rectangle(e.Bounds.Right - 30, e.Bounds.Top + 8, 22, 22);
-        using var xBrush = new SolidBrush(Color.FromArgb(0xF4, 0x43, 0x36));
-        e.Graphics.FillRectangle(xBrush, xRect);
-        using var xFont = new Font("Segoe UI", 10f, FontStyle.Bold);
-        using var xBrushText = new SolidBrush(Color.White);
-        var xsz = e.Graphics.MeasureString("X", xFont);
-        e.Graphics.DrawString("X", xFont, xBrushText, xRect.Left + (xRect.Width - xsz.Width) / 2, xRect.Top + (xRect.Height - xsz.Height) / 2);
-        e.DrawFocusRectangle();
-    }
-
-    public static Rectangle GetEmployeeXRect(Rectangle bounds) => new(bounds.Right - 30, bounds.Top + 8, 22, 22);
 
     private void Navigate(int step)
     {
@@ -1417,7 +1388,6 @@ public class MainForm : Form
             if (_db.IsEmployeeAssigned(emp.Id, d))
                 conflictDays.Add(d);
 
-        bool save = true;
         if (conflictDays.Count > 0)
         {
             var daysTxt = string.Join("\n", conflictDays.OrderBy(d => d).Select(d => $"  • {d:ddd dd.MM.yyyy}"));
@@ -1572,16 +1542,6 @@ public class MainForm : Form
     {
         var idx = _lbEmployees.IndexFromPoint(e.Location);
         if (idx < 0 || idx >= _lbEmployees.Items.Count) return;
-        var bounds = _lbEmployees.GetItemRectangle(idx);
-        if (GetEmployeeXRect(bounds).Contains(e.Location))
-        {
-            if (_lbEmployees.Items[idx] is Employee emp)
-            {
-                if (MessageBox.Show($"Mitarbeiter {emp.FullName} löschen?", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                    DeleteEmployee(emp);
-            }
-            return;
-        }
         if (_lbEmployees.Items[idx] is Employee dragEmp && e.Button == MouseButtons.Left)
         {
             _lbEmployees.SelectedIndex = idx;
