@@ -1,4 +1,4 @@
 {
-  "version": "1.1.18.0",
+  "version": "1.1.19.0",
   "notes": "Baustellen-Tab zeigt echte Namen (ToString); Urlaub/Krankheit im Tagesdialog löschbar; X-Buttons rechtsbündig; Kalender-Teamfarbe aus _teams aufgelöst; DB-Backup nutzt echten Pfad + Menü 'Datenbank wiederherstellen'; Urlaubsliste mit X-Löschen in Mitarbeiter-Maske"
 }
