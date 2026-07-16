@@ -130,6 +130,16 @@ public class DatabaseService
             up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (3)";
             up.ExecuteNonQuery();
         }
+
+        if (version < 4)
+        {
+            using var c5 = conn.CreateCommand();
+            c5.CommandText = "ALTER TABLE Vehicles ADD COLUMN Seats INTEGER NOT NULL DEFAULT 0";
+            c5.ExecuteNonQuery();
+            using var up = conn.CreateCommand();
+            up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (4)";
+            up.ExecuteNonQuery();
+        }
     }
 
     public SqliteConnection GetConnection()
@@ -205,10 +215,10 @@ public class DatabaseService
         var list = new List<Vehicle>();
         using var conn = GetConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT * FROM Vehicles ORDER BY Category, VehicleNumber";
+        cmd.CommandText = "SELECT Id, Category, VehicleNumber, LicensePlate, Seats FROM Vehicles ORDER BY Category, VehicleNumber";
         using var r = cmd.ExecuteReader();
         while (r.Read())
-            list.Add(new Vehicle { Id = r.GetInt32(0), RequiredLicense = r.GetString(1), VehicleNumber = r.GetString(2), LicensePlate = r.GetString(3) });
+            list.Add(new Vehicle { Id = r.GetInt32(0), RequiredLicense = r.GetString(1), VehicleNumber = r.GetString(2), LicensePlate = r.GetString(3), Seats = r.IsDBNull(4) ? 0 : r.GetInt32(4) });
         return list;
     }
 
@@ -218,19 +228,21 @@ public class DatabaseService
         using var cmd = conn.CreateCommand();
         if (v.Id == 0)
         {
-            cmd.CommandText = "INSERT INTO Vehicles (Category, VehicleNumber, LicensePlate) VALUES (@cat, @vn, @lp); SELECT last_insert_rowid()";
+            cmd.CommandText = "INSERT INTO Vehicles (Category, VehicleNumber, LicensePlate, Seats) VALUES (@cat, @vn, @lp, @seats); SELECT last_insert_rowid()";
             cmd.Parameters.AddWithValue("@cat", v.RequiredLicense);
             cmd.Parameters.AddWithValue("@vn", v.VehicleNumber);
             cmd.Parameters.AddWithValue("@lp", v.LicensePlate);
+            cmd.Parameters.AddWithValue("@seats", v.Seats);
             v.Id = (int)(long)cmd.ExecuteScalar()!;
         }
         else
         {
-            cmd.CommandText = "UPDATE Vehicles SET Category=@cat, VehicleNumber=@vn, LicensePlate=@lp WHERE Id=@id";
+            cmd.CommandText = "UPDATE Vehicles SET Category=@cat, VehicleNumber=@vn, LicensePlate=@lp, Seats=@seats WHERE Id=@id";
             cmd.Parameters.AddWithValue("@id", v.Id);
             cmd.Parameters.AddWithValue("@cat", v.RequiredLicense);
             cmd.Parameters.AddWithValue("@vn", v.VehicleNumber);
             cmd.Parameters.AddWithValue("@lp", v.LicensePlate);
+            cmd.Parameters.AddWithValue("@seats", v.Seats);
             cmd.ExecuteNonQuery();
         }
     }

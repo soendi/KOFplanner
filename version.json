@@ -1,4 +1,4 @@
 {
-  "version": "1.1.27.0",
-  "notes": "Fahrzeugwechsel beim Entfernen des letzten Fahrers prüft restliche Mitglieder; Kalender zeigt bei verknüpften Mehrtages-Terminen nur noch den durchgehenden Balken (keine Einzelzeilen)"
+  "version": "1.1.28.0",
+  "notes": "Neue 2-Monatsansicht im Kalender; Termine laufen durchgehend über Wochen- und Monatsgrenzen (kein Bruchpunkt an Wochenende/Monatsende)"
 }
