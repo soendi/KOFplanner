@@ -1,4 +1,4 @@
 {
-  "version": "1.1.30.0",
-  "notes": "Einstellungen-Fenster vergroessert (alle Felder inkl. Heimatadresse sichtbar, groessenveraenderbar/scrollbar)"
+  "version": "1.1.31.0",
+  "notes": "Bugfix Fahrdistanz/-zeit: Nominatim liefert lat/lon als String -> Parsing korrigiert; Fehler in Baustellen-Dialog sichtbar"
 }

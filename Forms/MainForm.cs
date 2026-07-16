@@ -280,6 +280,32 @@ public class MainForm : Form
         {
             if (_lvSites.GetItemAt(e.X, e.Y)?.Tag is ConstructionSite s) EditSite(s);
         };
+        var siteMenu = new ContextMenuStrip();
+        var miCompute = new ToolStripMenuItem("Fahrdistanz und -zeit ermitteln");
+        miCompute.Click += (_, _) =>
+        {
+            if (_lvSites.SelectedItems.Count > 0 && _lvSites.SelectedItems[0].Tag is ConstructionSite s) ComputeSiteDistance(s);
+        };
+        var miEdit = new ToolStripMenuItem("Bearbeiten");
+        miEdit.Click += (_, _) =>
+        {
+            if (_lvSites.SelectedItems.Count > 0 && _lvSites.SelectedItems[0].Tag is ConstructionSite s) EditSite(s);
+        };
+        var miDelete = new ToolStripMenuItem("Löschen");
+        miDelete.Click += (_, _) =>
+        {
+            if (_lvSites.SelectedItems.Count > 0 && _lvSites.SelectedItems[0].Tag is ConstructionSite s) DeleteSite(s);
+        };
+        siteMenu.Items.AddRange(new ToolStripItem[] { miCompute, miEdit, miDelete });
+        _lvSites.ContextMenuStrip = siteMenu;
+        _lvSites.MouseDown += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                var hit = _lvSites.GetItemAt(e.X, e.Y);
+                if (hit != null) { hit.Selected = true; }
+            }
+        };
         var siteBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
         var btnSiteNew = new Button { Text = "Neu", Width = 75 }; btnSiteNew.Click += (_, _) => EditSite(null); StyleButton(btnSiteNew);
         var btnSiteDel = new Button { Text = "Löschen", Width = 75 }; btnSiteDel.Click += (_, _) =>
@@ -2375,6 +2401,44 @@ public class MainForm : Form
                 "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         _db.DeleteSite(site.Id);
         RefreshAllData();
+    }
+
+    private void ComputeSiteDistance(ConstructionSite site)
+    {
+        var home = _settings.Load().HomeAddress;
+        if (string.IsNullOrWhiteSpace(home))
+        {
+            MessageBox.Show("Keine Heimatadresse in den Einstellungen hinterlegt.", "Fahrdistanz ermitteln", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(site.Address))
+        {
+            MessageBox.Show("Die Baustelle hat keine Adresse.", "Fahrdistanz ermitteln", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        Cursor = Cursors.WaitCursor;
+        try
+        {
+            var r = new RoutingService().Compute(home, site.Address, out var err);
+            if (r != null)
+            {
+                site.DistanceKm = r.DistanceKm;
+                site.DurationMinutes = r.DurationMinutes;
+                _db.SaveSite(site);
+                RefreshAllData();
+                MessageBox.Show($"Fahrt von Heimatadresse zu \"{site.Name}\":\n{r.DistanceKm:0.0} km, {site.DurationText}",
+                    "Fahrdistanz ermittelt", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                MessageBox.Show("Fahrdistanz nicht ermittelbar: " + (err ?? "unbekannt"),
+                    "Fahrdistanz ermitteln", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+        }
     }
 }
 

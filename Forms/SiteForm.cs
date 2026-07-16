@@ -80,7 +80,7 @@ public class SiteForm : Form
         if (!string.IsNullOrWhiteSpace(home) && !string.IsNullOrWhiteSpace(site.Address))
         {
             _lblStatus.Text = "Fahrdistanz wird abgefragt …";
-            var r = new RoutingService().Compute(home, site.Address);
+            var r = new RoutingService().Compute(home, site.Address, out var err);
             if (r != null)
             {
                 site.DistanceKm = r.DistanceKm;
@@ -89,7 +89,7 @@ public class SiteForm : Form
             }
             else
             {
-                _lblStatus.Text = "Fahrdistanz nicht ermittelbar (Adresse prüfen / offline).";
+                _lblStatus.Text = "Fahrdistanz nicht ermittelbar: " + (err ?? "unbekannt");
             }
         }
         else
