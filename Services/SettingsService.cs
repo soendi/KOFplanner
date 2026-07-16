@@ -25,6 +25,7 @@ public class AppSettings
 {
     public EmailSettings Email { get; set; } = new();
     public string PrinterName { get; set; } = "";
+    public string HomeAddress { get; set; } = "";
 }
 
 public class EmailSettings

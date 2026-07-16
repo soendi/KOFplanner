@@ -1,4 +1,4 @@
 {
-  "version": "1.1.28.0",
-  "notes": "Neue 2-Monatsansicht im Kalender; Termine laufen durchgehend über Wochen- und Monatsgrenzen (kein Bruchpunkt an Wochenende/Monatsende)"
+  "version": "1.1.29.0",
+  "notes": "2-Monatsansicht durchgehend (kein Bruchpunkt); Termine laufen ueber Wochen-/Monatsgrenzen; Vormonat/Folgemonat hellblau; Baustelle markieren -> zugeordnete MA informieren; Heimatadresse in Einstellungen; Fahrdistanz/-zeit (OSM) je Baustelle automatisch ermittelt"
 }

@@ -8,6 +8,7 @@ public class SettingsForm : Form
     private readonly TextBox _txtServer, _txtPort, _txtSender, _txtUser, _txtPass;
     private readonly CheckBox _chkSsl;
     private readonly ComboBox _cmbPrinter;
+    private readonly TextBox _txtHome;
 
     public SettingsForm(SettingsService settings)
     {
@@ -21,9 +22,11 @@ public class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
 
-        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 9, Padding = new Padding(12) };
+        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 11, Padding = new Padding(12) };
         for (int i = 0; i < 7; i++) tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
 
         tlp.Controls.Add(new Label { Text = "E-Mail (SMTP)", Font = new Font("Segoe UI", 11, FontStyle.Bold) }, 0, 0);
@@ -65,6 +68,13 @@ public class SettingsForm : Form
             _cmbPrinter.Items.Add("(keine Drucker gefunden)");
         tlp.Controls.Add(_cmbPrinter, 1, 8);
 
+        tlp.Controls.Add(new Label { Text = "Heimatadresse", Font = new Font("Segoe UI", 11, FontStyle.Bold) }, 0, 9);
+        tlp.SetColumnSpan(tlp.Controls[^1], 2);
+
+        tlp.Controls.Add(new Label { Text = "Adresse:", Anchor = AnchorStyles.Left }, 0, 10);
+        _txtHome = new TextBox { Dock = DockStyle.Fill, Text = s.HomeAddress };
+        tlp.Controls.Add(_txtHome, 1, 10);
+
         var btnCancel = new Button { Text = "Abbrechen", Width = 100, Height = 32, DialogResult = DialogResult.Cancel };
         var btnOk = new Button { Text = "Speichern", Width = 100, Height = 32, DialogResult = DialogResult.OK };
         btnOk.Click += (_, _) => Save(s);
@@ -86,6 +96,7 @@ public class SettingsForm : Form
         s.Email.Username = _txtUser.Text.Trim();
         s.Email.Password = _txtPass.Text;
         s.PrinterName = _cmbPrinter.SelectedItem?.ToString() == "(keine Drucker gefunden)" ? "" : _cmbPrinter.Text;
+        s.HomeAddress = _txtHome.Text.Trim();
         _settings.Save(s);
     }
 }

@@ -21,63 +21,70 @@ public class InformEmployeesForm : UserControl
 
         Font = new Font("Segoe UI", 9.5f);
 
-        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 7, Padding = new Padding(12) };
-        tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-        tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(12) };
+        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));   // Zeitraum
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // Listen (3 Spalten)
+        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));   // Button
+        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));  // Protokoll
 
-        // Range
-        tlp.Controls.Add(new Label { Text = "Zeitraum:", Anchor = AnchorStyles.Left }, 0, 0);
-        _cmbRange = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        // ---- Zeitraum ----
+        var pnlRange = new Panel { Dock = DockStyle.Fill };
+        pnlRange.Controls.Add(new Label { Text = "Zeitraum:", Location = new Point(0, 2), AutoSize = true });
+        _cmbRange = new ComboBox { Left = 70, Top = 0, Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
         _cmbRange.Items.AddRange(new object[] { "Aktuelle Woche", "Nächste Woche", "Aktueller Monat", "Nächster Monat", "Spannweite" });
         _cmbRange.SelectedIndex = 0;
         _cmbRange.SelectedIndexChanged += (_, _) => UpdateRangeDates();
-        tlp.Controls.Add(_cmbRange, 1, 0);
+        pnlRange.Controls.Add(_cmbRange);
+        pnlRange.Controls.Add(new Label { Text = "Von / Bis:", Location = new Point(0, 34), AutoSize = true });
+        _dtpFrom = new DateTimePicker { Left = 70, Top = 32, Width = 120, Format = DateTimePickerFormat.Short };
+        _dtpUntil = new DateTimePicker { Left = 200, Top = 32, Width = 120, Format = DateTimePickerFormat.Short };
+        pnlRange.Controls.AddRange(new Control[] { _dtpFrom, _dtpUntil });
+        tlp.Controls.Add(pnlRange, 0, 0);
 
-        // Dates
-        tlp.Controls.Add(new Label { Text = "Von / Bis:", Anchor = AnchorStyles.Left }, 0, 1);
-        var pnlDates = new Panel { Dock = DockStyle.Fill };
-        _dtpFrom = new DateTimePicker { Left = 0, Top = 2, Width = 130, Format = DateTimePickerFormat.Short };
-        _dtpUntil = new DateTimePicker { Left = 140, Top = 2, Width = 130, Format = DateTimePickerFormat.Short };
-        pnlDates.Controls.AddRange(new Control[] { _dtpFrom, _dtpUntil });
-        tlp.Controls.Add(pnlDates, 1, 1);
+        // ---- 3 Listen nebeneinander (hochformat) ----
+        var lists = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1 };
+        lists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+        lists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+        lists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+        lists.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        // Sites (multi-select list; STRG/Klick für Mehrfachauswahl)
-        tlp.Controls.Add(new Label { Text = "Baustellen:", Anchor = AnchorStyles.Top }, 0, 2);
         _lstSites = MakeMultiList(_db.GetAllSites().OrderBy(x => x.Name).Select(s => (object)s), s => ((ConstructionSite)s).Name);
-        tlp.Controls.Add(_lstSites, 1, 2);
-
-        // Teams
-        tlp.Controls.Add(new Label { Text = "Teams:", Anchor = AnchorStyles.Top }, 0, 3);
         _lstTeams = MakeMultiList(_db.GetAllTeams().OrderBy(x => x.Name).Select(t => (object)t), t => ((Team)t).Name);
-        tlp.Controls.Add(_lstTeams, 1, 3);
-
-        // Employees
-        tlp.Controls.Add(new Label { Text = "Mitarbeiter:", Anchor = AnchorStyles.Top }, 0, 4);
         _lstEmployees = MakeMultiList(_db.GetAllEmployees().OrderBy(x => x.LastName).Select(e => (object)e), e => ((Employee)e).FullName);
-        tlp.Controls.Add(_lstEmployees, 1, 4);
+        // Bei markierter Baustelle den Zeitraum automatisch auf deren Laufzeit setzen,
+        // damit die zugeordneten Einsätze gefunden werden.
+        _lstSites.SelectedIndexChanged += (_, _) => AutoRangeFromSites();
 
-        // Button
+        lists.Controls.Add(MakeListColumn("Baustellen", _lstSites), 0, 0);
+        lists.Controls.Add(MakeListColumn("Teams", _lstTeams), 1, 0);
+        lists.Controls.Add(MakeListColumn("Mitarbeiter", _lstEmployees), 2, 0);
+        tlp.Controls.Add(lists, 0, 1);
+
+        // ---- Button ----
         var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var btnSend = new Button { Text = "Infos verschicken", Width = 150, Height = 30, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
         btnSend.Click += (_, _) => Inform();
         flp.Controls.Add(btnSend);
-        tlp.Controls.Add(flp, 1, 5);
+        tlp.Controls.Add(flp, 0, 2);
 
-        // Log (>= 10 Zeilen)
-        tlp.Controls.Add(new Label { Text = "Protokoll:", Anchor = AnchorStyles.Top }, 0, 6);
+        // ---- Protokoll ----
+        tlp.Controls.Add(new Label { Text = "Protokoll:", Anchor = AnchorStyles.Top }, 0, 3);
         _txtLog = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, ReadOnly = true };
-        tlp.Controls.Add(_txtLog, 1, 6);
+        tlp.Controls.Add(_txtLog, 0, 3);
 
         Controls.Add(tlp);
         UpdateRangeDates();
+    }
+
+    // Baut eine Spalte: Beschriftung oben, Liste füllt den Rest.
+    private static Panel MakeListColumn(string caption, ListBox list)
+    {
+        var p = new Panel { Dock = DockStyle.Fill, Padding = new Padding(2) };
+        var lbl = new Label { Text = caption, Dock = DockStyle.Top, Height = 18, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
+        list.Dock = DockStyle.Fill;
+        p.Controls.Add(list);
+        p.Controls.Add(lbl);
+        return p;
     }
 
     private static ListBox MakeMultiList(IEnumerable<object> items, Func<object, string> textSelector)
@@ -98,6 +105,36 @@ public class InformEmployeesForm : UserControl
 
     private static IEnumerable<object> SelectedTags(ListBox lst) =>
         lst.SelectedItems.Cast<ListItem>().Select(i => i.Value);
+
+    // Aktualisiert die drei Listen, nachdem neue Datensätze angelegt wurden.
+    public void RefreshLists()
+    {
+        Reload(_lstSites, _db.GetAllSites().OrderBy(x => x.Name).Select(s => (object)s), s => ((ConstructionSite)s).Name);
+        Reload(_lstTeams, _db.GetAllTeams().OrderBy(x => x.Name).Select(t => (object)t), t => ((Team)t).Name);
+        Reload(_lstEmployees, _db.GetAllEmployees().OrderBy(x => x.LastName).Select(e => (object)e), e => ((Employee)e).FullName);
+    }
+
+    private static void Reload(ListBox lst, IEnumerable<object> items, Func<object, string> textSelector)
+    {
+        var sel = lst.SelectedItems.Cast<ListItem>().Select(i => i.Value).ToHashSet();
+        lst.Items.Clear();
+        foreach (var item in items)
+            lst.Items.Add(new ListItem(item, textSelector(item)));
+        // Vorherige Auswahl wiederherstellen (anhand der Objekt-Referenz).
+        for (int i = 0; i < lst.Items.Count; i++)
+            if (lst.Items[i] is ListItem li && sel.Contains(li.Value))
+                lst.SetSelected(i, true);
+    }
+
+    private void AutoRangeFromSites()
+    {
+        var sites = SelectedTags(_lstSites).Cast<ConstructionSite>().ToList();
+        if (sites.Count == 0) return;
+        var from = sites.Min(s => s.StartDate.Date);
+        var until = sites.Max(s => s.EndDate?.Date ?? s.StartDate.Date.AddMonths(1));
+        _dtpFrom.Value = from;
+        _dtpUntil.Value = until;
+    }
 
     private void UpdateRangeDates()
     {

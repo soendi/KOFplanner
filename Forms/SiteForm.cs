@@ -6,23 +6,26 @@ namespace KOFplanner.Forms;
 public class SiteForm : Form
 {
     private readonly DatabaseService _db;
+    private readonly SettingsService _settings;
     private readonly ConstructionSite? _site;
     private readonly TextBox _txtName, _txtAddress;
     private readonly DateTimePicker _dtpStart, _dtpEnd;
     private readonly CheckBox _chkEnd;
+    private readonly Label _lblStatus;
 
-    public SiteForm(DatabaseService db, ConstructionSite? site)
+    public SiteForm(DatabaseService db, SettingsService settings, ConstructionSite? site)
     {
         _db = db;
+        _settings = settings;
         _site = site;
         Text = site == null ? "Neue Baustelle" : "Baustelle bearbeiten";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(450, 300);
+        Size = new Size(460, 360);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
 
-        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(10), RowCount = 5 };
+        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(10), RowCount = 6 };
         tlp.Controls.Add(new Label { Text = "Name:", Anchor = AnchorStyles.Left }, 0, 0);
         _txtName = new TextBox { Dock = DockStyle.Fill };
         tlp.Controls.Add(_txtName, 1, 0);
@@ -44,12 +47,16 @@ public class SiteForm : Form
         endPanel.Controls.Add(_chkEnd);
         tlp.Controls.Add(endPanel, 1, 3);
 
+        _lblStatus = new Label { Text = "", Dock = DockStyle.Fill, ForeColor = Color.Gray, AutoSize = false };
+        tlp.Controls.Add(_lblStatus, 0, 4);
+        tlp.SetColumnSpan(_lblStatus, 2);
+
         var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.LeftToRight, Height = 40 };
         var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, Cursor = Cursors.Hand };
         btnOk.Click += (_, _) => Save();
         var btnCancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 80, FlatStyle = FlatStyle.Flat };
         btnPanel.Controls.AddRange(new Control[] { btnOk, btnCancel });
-        tlp.Controls.Add(btnPanel, 0, 4);
+        tlp.Controls.Add(btnPanel, 0, 5);
         tlp.SetColumnSpan(btnPanel, 2);
         Controls.Add(tlp);
     }
@@ -67,6 +74,30 @@ public class SiteForm : Form
         site.Address = _txtAddress.Text.Trim();
         site.StartDate = _dtpStart.Value;
         site.EndDate = _chkEnd.Checked ? null : _dtpEnd.Value;
+
+        // Fahrdistanz/-zeit von der Heimatadresse zur Baustelle abfragen (Straße/Auto).
+        var home = _settings.Load().HomeAddress;
+        if (!string.IsNullOrWhiteSpace(home) && !string.IsNullOrWhiteSpace(site.Address))
+        {
+            _lblStatus.Text = "Fahrdistanz wird abgefragt …";
+            var r = new RoutingService().Compute(home, site.Address);
+            if (r != null)
+            {
+                site.DistanceKm = r.DistanceKm;
+                site.DurationMinutes = r.DurationMinutes;
+                _lblStatus.Text = $"Fahrt: {r.DistanceKm:0.0} km, {site.DurationText}";
+            }
+            else
+            {
+                _lblStatus.Text = "Fahrdistanz nicht ermittelbar (Adresse prüfen / offline).";
+            }
+        }
+        else
+        {
+            site.DistanceKm = 0;
+            site.DurationMinutes = 0;
+        }
+
         _db.SaveSite(site);
     }
 }

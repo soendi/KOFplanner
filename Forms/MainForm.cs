@@ -51,6 +51,7 @@ public class MainForm : Form
 
     // Tab 4 controls (Sites)
     private readonly ListView _lvSites;
+    private InformEmployeesForm? _informForm;
 
     // Calendar drag selection
     private DateTime? _dragStartDate, _dragEndDate, _dragCurrentDate;
@@ -271,6 +272,8 @@ public class MainForm : Form
         _lvSites.Columns.Add("Name", 160);
         _lvSites.Columns.Add("Adresse", 200);
         _lvSites.Columns.Add("Zeitraum", 160);
+        _lvSites.Columns.Add("km", 70);
+        _lvSites.Columns.Add("Fahrzeit", 80);
         _lvSites.Columns.Add("Info", 200);
         _lvSites.Resize += (_, _) => ResizeListColumns(_lvSites);
         _lvSites.MouseDoubleClick += (_, e) =>
@@ -291,7 +294,8 @@ public class MainForm : Form
 
         // ========== TAB 5: MITARBEITER INFORMIEREN ==========
         var tabInform = new TabPage("Mitarbeiter informieren");
-        tabInform.Controls.Add(new InformEmployeesForm(_db, _settings) { Dock = DockStyle.Fill });
+        _informForm = new InformEmployeesForm(_db, _settings) { Dock = DockStyle.Fill };
+        tabInform.Controls.Add(_informForm);
         _tabControl.TabPages.Add(tabInform);
 
         // Initial load
@@ -346,6 +350,7 @@ public class MainForm : Form
         RefreshVehicleList();
         RefreshSiteList();
         RefreshCalendar();
+        _informForm?.RefreshLists();
     }
 
     private void RefreshVehicleList()
@@ -376,6 +381,8 @@ public class MainForm : Form
                 s.Name,
                 s.Address,
                 s.EndDate.HasValue ? $"{s.StartDate:dd.MM.yy} – {s.EndDate.Value:dd.MM.yy}" : s.StartDate.ToString("dd.MM.yy"),
+                s.DistanceKm > 0 ? $"{s.DistanceKm:0.0}" : "–",
+                s.DurationText,
                 s.DisplayText
             })
             { Tag = s };
@@ -491,7 +498,12 @@ public class MainForm : Form
         else
         {
             _lblMonthYear.Text = _currentMonth.ToString("MMMM yyyy");
-            _monthAssignments = _db.GetMonthAssignments(_currentMonth);
+            // Fetch the whole visible grid (including the trailing days of the
+            // previous month and the leading days of the next month) so multi-day
+            // assignments can be drawn continuously across the month boundary.
+            var gs = GridStartFor(_currentMonth);
+            var ge = gs.AddDays(_twoMonthView ? 83 : 41);
+            _monthAssignments = _db.GetAllAssignments(gs, ge);
         }
         _vacations = _db.GetAllVacations();
         _sickness = _db.GetAllSickness();
@@ -531,31 +543,31 @@ public class MainForm : Form
 
         var today = DateTime.Today;
 
-        // Determine the per-row date source. In 2-month view rows 0-5 belong to
-        // month 1 and rows 6-11 to month 2.
+        // In 2-month view the two months are drawn as one continuous 12-week grid
+        // (no gap between them). In month view the 6 week-rows are drawn as usual.
         if (_twoMonthView)
         {
-            var m1 = GridStartFor(_currentMonth);
-            var m2 = GridStartFor(_currentMonth.AddMonths(1));
             for (int row = 0; row < 12; row++)
             {
-                var baseStart = row < 6 ? m1 : m2;
                 for (int col = 0; col < 7; col++)
                 {
-                    var date = baseStart.AddDays((row % 6) * 7 + col);
+                    var date = gridStart.AddDays(row * 7 + col);
                     var x = _calendarOrigin.X + col * _calendarDayWidth;
                     var y = _calendarOrigin.Y + row * _calendarDayHeight;
                     DrawDayCell(g, date, x, y, _calendarDayWidth, _calendarDayHeight, false);
                 }
             }
-            // Separator + month labels between the two months.
-            var sepY = _calendarOrigin.Y + 6 * _calendarDayHeight;
-            using var sp = new Pen(Color.DarkGray, 2);
-            g.DrawLine(sp, _calendarOrigin.X, sepY, _calendarOrigin.X + 7 * _calendarDayWidth, sepY);
+            // Month labels at the top of each month block.
             using var mf = new Font(Font, FontStyle.Bold);
             using var mb = new SolidBrush(Color.DarkSlateGray);
-            g.DrawString(_currentMonth.ToString("MMMM yyyy"), mf, mb, _calendarOrigin.X, sepY - _calendarDayHeight + 4);
-            g.DrawString(_currentMonth.AddMonths(1).ToString("MMMM yyyy"), mf, mb, _calendarOrigin.X, sepY + 4);
+            g.DrawString(_currentMonth.ToString("MMMM yyyy"), mf, mb, _calendarOrigin.X + 2, _calendarOrigin.Y - 12);
+            var nextMon = _currentMonth.AddMonths(1);
+            // Find the row where the next month starts (first day of next month).
+            int nextRow = -1;
+            for (int r = 0; r < 12; r++)
+                if (gridStart.AddDays(r * 7).Month == nextMon.Month && gridStart.AddDays(r * 7).Year == nextMon.Year) { nextRow = r; break; }
+            if (nextRow >= 0)
+                g.DrawString(nextMon.ToString("MMMM yyyy"), mf, mb, _calendarOrigin.X + 2, _calendarOrigin.Y + nextRow * _calendarDayHeight - 12);
         }
         else
         {
@@ -611,6 +623,7 @@ public class MainForm : Form
         var back = Color.White;
         if (IsInDragRange(date)) back = Color.FromArgb(200, 220, 255);
         else if (date == DateTime.Today) back = Color.FromArgb(220, 235, 252);
+        else if (!IsFocusDate(date)) back = Color.FromArgb(0xD6, 0xE8, 0xF5); // außerhalb des Fokus-Monats: hellblau
         else if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) back = Color.FromArgb(248, 248, 248);
         using var bb = new SolidBrush(back);
         g.FillRectangle(bb, x, y, cw, ch);
@@ -840,18 +853,8 @@ public class MainForm : Form
     // Row index of a date within the current view (week view: always 0; month view: week row).
     private int CellRow(DateTime date)
     {
-        if (_weekView) return 0;
-        if (_twoMonthView)
-        {
-            if (date.Year == _currentMonth.Year && date.Month == _currentMonth.Month)
-                return MonthRow(date, _currentMonth);
-            if (date.Year == _currentMonth.AddMonths(1).Year && date.Month == _currentMonth.AddMonths(1).Month)
-                return 6 + MonthRow(date, _currentMonth.AddMonths(1));
-            return -1;
-        }
-        var firstDow = (int)_currentMonth.DayOfWeek;
-        var offset = firstDow == 0 ? 6 : firstDow - 1;
-        return (date.Day + offset - 1) / 7;
+        var (row, _) = CellRowCol(date);
+        return row;
     }
 
     private bool HasDayBlock(DateTime date)
@@ -884,43 +887,40 @@ public class MainForm : Form
 
     private (int x, int y) GetCellPosition(DateTime date)
     {
+        var (row, col) = CellRowCol(date);
+        if (row < 0 || col < 0) return (-1, -1);
+        return (_calendarOrigin.X + col * _calendarDayWidth, _calendarOrigin.Y + row * _calendarDayHeight);
+    }
+
+    // Returns (row, col) within the visible grid, or (-1,-1) when the date is not shown.
+    private (int row, int col) CellRowCol(DateTime date)
+    {
         if (_weekView)
         {
-            var mon = _weekStart;
-            if (date < mon || date > mon.AddDays(6)) return (-1, -1);
-            var idx = (date - mon).Days;
-            return (_calendarOrigin.X + idx * _calendarDayWidth, _calendarOrigin.Y);
+            if (date < _weekStart || date > _weekStart.AddDays(6)) return (-1, -1);
+            var idx = (date - _weekStart).Days;
+            return (0, idx);
         }
+        var gs = GridStart();
+        var span = (_twoMonthView ? 84 : 42);
+        var diff = (date - gs).Days;
+        if (diff < 0 || diff >= span) return (-1, -1);
+        return (diff / 7, diff % 7);
+    }
+
+    // A day is "in focus" (white tile) when it belongs to the currently displayed
+    // month. In 2-month view the leading days of the over-next month are also kept
+    // white so spans continue seamlessly across the boundary.
+    private bool IsFocusDate(DateTime date)
+    {
+        if (_weekView) return true;
+        if (date.Year == _currentMonth.Year && date.Month == _currentMonth.Month) return true;
         if (_twoMonthView)
         {
-            int row;
-            if (date.Year == _currentMonth.Year && date.Month == _currentMonth.Month)
-                row = MonthRow(date, _currentMonth);
-            else if (date.Year == _currentMonth.AddMonths(1).Year && date.Month == _currentMonth.AddMonths(1).Month)
-                row = 6 + MonthRow(date, _currentMonth.AddMonths(1));
-            else
-                return (-1, -1);
-            var col = (date.Day + LeadOffset(date) - 1) % 7;
-            return (_calendarOrigin.X + col * _calendarDayWidth, _calendarOrigin.Y + row * _calendarDayHeight);
+            var overNext = _currentMonth.AddMonths(2);
+            if (date.Year == overNext.Year && date.Month == overNext.Month) return true;
         }
-        if (date.Year != _currentMonth.Year || date.Month != _currentMonth.Month) return (-1, -1);
-        var firstDow = (int)_currentMonth.DayOfWeek;
-        var offset = firstDow == 0 ? 6 : firstDow - 1;
-        var dayNum = date.Day;
-        var row2 = (dayNum + offset - 1) / 7;
-        var col2 = (dayNum + offset - 1) % 7;
-        return (_calendarOrigin.X + col2 * _calendarDayWidth, _calendarOrigin.Y + row2 * _calendarDayHeight);
-    }
-
-    private static int LeadOffset(DateTime date)
-    {
-        var firstDow = (int)new DateTime(date.Year, date.Month, 1).DayOfWeek;
-        return firstDow == 0 ? 6 : firstDow - 1;
-    }
-
-    private static int MonthRow(DateTime date, DateTime month)
-    {
-        return (date.Day + LeadOffset(month) - 1) / 7;
+        return false;
     }
 
     private DateTime? GetDateFromPoint(Point p)
@@ -934,14 +934,8 @@ public class MainForm : Form
         var gridStart = GridStart();
         var date = gridStart.AddDays(row * 7 + col);
         if (_weekView) return date;
-        if (_twoMonthView)
-        {
-            if ((date.Year == _currentMonth.Year && date.Month == _currentMonth.Month)
-                || (date.Year == _currentMonth.AddMonths(1).Year && date.Month == _currentMonth.AddMonths(1).Month))
-                return date;
-            return null;
-        }
-        if (date.Year != _currentMonth.Year || date.Month != _currentMonth.Month) return null;
+        // In month/2-month view the (row,col) is always a real visible cell, so no
+        // further month filtering is needed.
         return date;
     }
 
@@ -2370,7 +2364,7 @@ public class MainForm : Form
     // ====== SITE CRUD ======
     private void EditSite(ConstructionSite? site)
     {
-        using var f = new SiteForm(_db, site);
+        using var f = new SiteForm(_db, _settings, site);
         if (f.ShowDialog(this) == DialogResult.OK)
             RefreshAllData();
     }

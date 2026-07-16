@@ -140,6 +140,19 @@ public class DatabaseService
             up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (4)";
             up.ExecuteNonQuery();
         }
+
+        if (version < 5)
+        {
+            using var c6 = conn.CreateCommand();
+            c6.CommandText = "ALTER TABLE ConstructionSites ADD COLUMN DistanceKm REAL NOT NULL DEFAULT 0";
+            c6.ExecuteNonQuery();
+            using var c7 = conn.CreateCommand();
+            c7.CommandText = "ALTER TABLE ConstructionSites ADD COLUMN DurationMinutes INTEGER NOT NULL DEFAULT 0";
+            c7.ExecuteNonQuery();
+            using var up = conn.CreateCommand();
+            up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (5)";
+            up.ExecuteNonQuery();
+        }
     }
 
     public SqliteConnection GetConnection()
@@ -359,7 +372,9 @@ public class DatabaseService
                 Name = r.GetString(1),
                 Address = r.IsDBNull(2) ? "" : r.GetString(2),
                 StartDate = DateTime.Parse(r.GetString(3)),
-                EndDate = r.IsDBNull(4) ? null : DateTime.Parse(r.GetString(4))
+                EndDate = r.IsDBNull(4) ? null : DateTime.Parse(r.GetString(4)),
+                DistanceKm = r.IsDBNull(5) ? 0 : r.GetDouble(5),
+                DurationMinutes = r.IsDBNull(6) ? 0 : r.GetInt32(6)
             });
         return list;
     }
@@ -370,21 +385,25 @@ public class DatabaseService
         using var cmd = conn.CreateCommand();
         if (s.Id == 0)
         {
-            cmd.CommandText = "INSERT INTO ConstructionSites (Name, Location, StartDate, EndDate) VALUES (@n, @l, @sd, @ed); SELECT last_insert_rowid()";
+            cmd.CommandText = "INSERT INTO ConstructionSites (Name, Location, StartDate, EndDate, DistanceKm, DurationMinutes) VALUES (@n, @l, @sd, @ed, @km, @dur); SELECT last_insert_rowid()";
             cmd.Parameters.AddWithValue("@n", s.Name);
             cmd.Parameters.AddWithValue("@l", s.Address);
             cmd.Parameters.AddWithValue("@sd", s.StartDate.ToString("yyyy-MM-dd"));
             cmd.Parameters.AddWithValue("@ed", s.EndDate?.ToString("yyyy-MM-dd") ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@km", s.DistanceKm);
+            cmd.Parameters.AddWithValue("@dur", s.DurationMinutes);
             s.Id = (int)(long)cmd.ExecuteScalar()!;
         }
         else
         {
-            cmd.CommandText = "UPDATE ConstructionSites SET Name=@n, Location=@l, StartDate=@sd, EndDate=@ed WHERE Id=@id";
+            cmd.CommandText = "UPDATE ConstructionSites SET Name=@n, Location=@l, StartDate=@sd, EndDate=@ed, DistanceKm=@km, DurationMinutes=@dur WHERE Id=@id";
             cmd.Parameters.AddWithValue("@id", s.Id);
             cmd.Parameters.AddWithValue("@n", s.Name);
             cmd.Parameters.AddWithValue("@l", s.Address);
             cmd.Parameters.AddWithValue("@sd", s.StartDate.ToString("yyyy-MM-dd"));
             cmd.Parameters.AddWithValue("@ed", s.EndDate?.ToString("yyyy-MM-dd") ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@km", s.DistanceKm);
+            cmd.Parameters.AddWithValue("@dur", s.DurationMinutes);
             cmd.ExecuteNonQuery();
         }
     }
