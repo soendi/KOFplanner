@@ -671,8 +671,11 @@ public class MainForm : Form
         var lines = new List<(string Label, Color Fill, Color Border, Color Text)>();
 
         // Assignments that are part of a multi-day span are drawn as one continuous bar,
-        // so their individual per-day lines (team, site, vehicle, employee) are suppressed here.
-        var visible = day.Where(a => !_spanAssignmentIds.Contains(a.Id)).ToList();
+        // so their individual per-day lines (team, site, vehicle, employee) are suppressed in
+        // the normal grid. In the zoomed overlay there is no continuous bar, so we show them.
+        var visible = zoomed
+            ? day.ToList()
+            : day.Where(a => !_spanAssignmentIds.Contains(a.Id)).ToList();
 
         var teamAssignments = visible.Where(a => a.Team != null).ToList();
         var connectedSiteIds = new HashSet<int>();
