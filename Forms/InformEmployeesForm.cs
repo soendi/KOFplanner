@@ -10,7 +10,7 @@ public class InformEmployeesForm : UserControl
     private readonly NotificationService _notify;
     private readonly ComboBox _cmbRange;
     private readonly DateTimePicker _dtpFrom, _dtpUntil;
-    private readonly FlowLayoutPanel _flowSites, _flowTeams, _flowEmployees;
+    private readonly ListBox _lstSites, _lstTeams, _lstEmployees;
     private readonly TextBox _txtLog;
 
     public InformEmployeesForm(DatabaseService db, SettingsService settings)
@@ -26,10 +26,11 @@ public class InformEmployeesForm : UserControl
         tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
-        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
         tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         // Range
@@ -48,20 +49,20 @@ public class InformEmployeesForm : UserControl
         pnlDates.Controls.AddRange(new Control[] { _dtpFrom, _dtpUntil });
         tlp.Controls.Add(pnlDates, 1, 1);
 
-        // Sites
+        // Sites (multi-select list; STRG/Klick für Mehrfachauswahl)
         tlp.Controls.Add(new Label { Text = "Baustellen:", Anchor = AnchorStyles.Top }, 0, 2);
-        _flowSites = MakeCheckGroup(_db.GetAllSites().OrderBy(x => x.Name).Select(s => (object)s), s => ((ConstructionSite)s).Name);
-        tlp.Controls.Add(_flowSites, 1, 2);
+        _lstSites = MakeMultiList(_db.GetAllSites().OrderBy(x => x.Name).Select(s => (object)s), s => ((ConstructionSite)s).Name);
+        tlp.Controls.Add(_lstSites, 1, 2);
 
         // Teams
         tlp.Controls.Add(new Label { Text = "Teams:", Anchor = AnchorStyles.Top }, 0, 3);
-        _flowTeams = MakeCheckGroup(_db.GetAllTeams().OrderBy(x => x.Name).Select(t => (object)t), t => ((Team)t).Name);
-        tlp.Controls.Add(_flowTeams, 1, 3);
+        _lstTeams = MakeMultiList(_db.GetAllTeams().OrderBy(x => x.Name).Select(t => (object)t), t => ((Team)t).Name);
+        tlp.Controls.Add(_lstTeams, 1, 3);
 
         // Employees
         tlp.Controls.Add(new Label { Text = "Mitarbeiter:", Anchor = AnchorStyles.Top }, 0, 4);
-        _flowEmployees = MakeCheckGroup(_db.GetAllEmployees().OrderBy(x => x.LastName).Select(e => (object)e), e => ((Employee)e).FullName);
-        tlp.Controls.Add(_flowEmployees, 1, 4);
+        _lstEmployees = MakeMultiList(_db.GetAllEmployees().OrderBy(x => x.LastName).Select(e => (object)e), e => ((Employee)e).FullName);
+        tlp.Controls.Add(_lstEmployees, 1, 4);
 
         // Buttons
         var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
@@ -72,30 +73,33 @@ public class InformEmployeesForm : UserControl
         flp.Controls.AddRange(new Control[] { btnEmail, btnPrint });
         tlp.Controls.Add(flp, 1, 5);
 
-        // Log
+        // Log (>= 10 Zeilen)
         tlp.Controls.Add(new Label { Text = "Protokoll:", Anchor = AnchorStyles.Top }, 0, 6);
         _txtLog = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, ReadOnly = true };
-        tlp.Controls.Add(_txtLog, 1, 5);
+        tlp.Controls.Add(_txtLog, 1, 6);
 
         Controls.Add(tlp);
         UpdateRangeDates();
     }
 
-    private static FlowLayoutPanel MakeCheckGroup(IEnumerable<object> items, Func<object, string> textSelector)
+    private static ListBox MakeMultiList(IEnumerable<object> items, Func<object, string> textSelector)
     {
-        var gb = new GroupBox { Dock = DockStyle.Fill, Padding = new Padding(6) };
-        var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, AutoScroll = true };
+        var lst = new ListBox { Dock = DockStyle.Fill, SelectionMode = SelectionMode.MultiExtended, Sorted = false };
         foreach (var item in items)
-        {
-            var cb = new CheckBox { Text = textSelector(item), AutoSize = true, Checked = true, Margin = new Padding(3, 2, 10, 2), Tag = item };
-            flow.Controls.Add(cb);
-        }
-        gb.Controls.Add(flow);
-        return flow;
+            lst.Items.Add(new ListItem(item, textSelector(item)));
+        return lst;
     }
 
-    private static IEnumerable<object> CheckedItems(FlowLayoutPanel flow) =>
-        flow.Controls.OfType<CheckBox>().Where(c => c.Checked).Select(c => c.Tag).OfType<object>();
+    private sealed class ListItem
+    {
+        public object Value;
+        public string Text = "";
+        public ListItem(object value, string text) { Value = value; Text = text; }
+        public override string ToString() => Text;
+    }
+
+    private static IEnumerable<object> SelectedTags(ListBox lst) =>
+        lst.SelectedItems.Cast<ListItem>().Select(i => i.Value);
 
     private void UpdateRangeDates()
     {
@@ -132,8 +136,8 @@ public class InformEmployeesForm : UserControl
     {
         var from = _dtpFrom.Value.Date;
         var until = _dtpUntil.Value.Date;
-        var sites = CheckedItems(_flowSites).Cast<ConstructionSite>().Select(s => s.Id).ToHashSet();
-        var teams = CheckedItems(_flowTeams).Cast<Team>().Select(t => t.Id).ToHashSet();
+        var sites = SelectedTags(_lstSites).Cast<ConstructionSite>().Select(s => s.Id).ToHashSet();
+        var teams = SelectedTags(_lstTeams).Cast<Team>().Select(t => t.Id).ToHashSet();
 
         var all = _db.GetAllAssignments(from, until);
         var filtered = all.Where(a =>
@@ -156,9 +160,8 @@ public class InformEmployeesForm : UserControl
         }
 
         // Explicitly selected employees
-        var allEmps = _flowEmployees.Controls.OfType<CheckBox>().ToList();
-        var allEmpsChecked = allEmps.All(c => c.Checked);
-        var explicitEmps = CheckedItems(_flowEmployees).Cast<Employee>().Select(e => e.Id).ToHashSet();
+        var allEmpsChecked = _lstEmployees.Items.Count == 0 || _lstEmployees.SelectedItems.Count == _lstEmployees.Items.Count;
+        var explicitEmps = SelectedTags(_lstEmployees).Cast<Employee>().Select(e => e.Id).ToHashSet();
         if (allEmpsChecked)
             empIds.UnionWith(explicitEmps);
         else

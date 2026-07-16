@@ -14,6 +14,8 @@ public class Employee
 
     public string FullName => $"{FirstName} {LastName}";
 
+    public override string ToString() => FullName;
+
     public string[] GetLicenseList() =>
         string.IsNullOrEmpty(LicenseCategories) ? Array.Empty<string>() :
         LicenseCategories.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);

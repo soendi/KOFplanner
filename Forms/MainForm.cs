@@ -18,6 +18,18 @@ public class MainForm : Form
     private List<Assignment> _monthAssignments = new();
     private List<Vacation> _vacations = new();
     private List<Sickness> _sickness = new();
+    private readonly List<CalendarSpan> _spans = new();
+    private readonly HashSet<string> _multiDayKeys = new();
+
+    private sealed class CalendarSpan
+    {
+        public DateTime From;
+        public DateTime To;
+        public string Label = "";
+        public Color Fill;
+        public Color Border;
+        public Color Text;
+    }
     private List<Employee> _employees = new();
     private List<Team> _teams = new();
     private List<Vehicle> _vehicles = new();
@@ -32,10 +44,10 @@ public class MainForm : Form
         private readonly ListBox _lbEmployees;
         private readonly FlowLayoutPanel _flowTeamCards;
         private readonly Panel _pnlNewTeamDropZone;
-        private readonly FlowLayoutPanel _flowVehicles;
+        private readonly ListView _lvVehicles;
 
     // Tab 4 controls (Sites)
-    private readonly FlowLayoutPanel _flowSites;
+    private readonly ListView _lvSites;
 
     // Calendar drag selection
     private DateTime? _dragStartDate, _dragEndDate, _dragCurrentDate;
@@ -169,12 +181,12 @@ public class MainForm : Form
         var teamHeader = new Panel { Dock = DockStyle.Top, Height = 30 };
         teamHeader.Controls.Add(new Label { Text = "Teams", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 4, 0, 0) });
         colTeam.Controls.Add(teamHeader);
-        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(2, 8, 2, 4) };
+        _flowTeamCards = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(2, 20, 2, 4) };
         _flowTeamCards.Resize += (_, _) => LayoutTeamCards();
         _pnlNewTeamDropZone = new Panel
         {
             Height = 76, BackColor = Color.FromArgb(0xE8, 0xF5, 0xE9),
-            BorderStyle = BorderStyle.FixedSingle, AllowDrop = true, Margin = new Padding(0, 0, 0, 12),
+            BorderStyle = BorderStyle.FixedSingle, AllowDrop = true, Margin = new Padding(0, 20, 0, 12),
             Cursor = Cursors.Hand
         };
         _pnlNewTeamDropZone.Paint += (s, e) =>
@@ -203,11 +215,24 @@ public class MainForm : Form
         vehHeader.Controls.Add(new Label { Text = "Fahrzeuge", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
         var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
         var btnVehNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
+        var btnVehDel = new Button { Text = "Löschen", Width = 80, Height = 28 }; btnVehDel.Click += (_, _) =>
+        {
+            if (_lvVehicles.SelectedItems.Count > 0 && _lvVehicles.SelectedItems[0].Tag is Vehicle v) DeleteVehicle(v);
+        }; StyleButton(btnVehDel);
         vehBtns.Controls.Add(btnVehNew);
+        vehBtns.Controls.Add(btnVehDel);
         vehHeader.Controls.Add(vehBtns);
-        _flowVehicles = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(4) };
-        _flowVehicles.Resize += (_, _) => RelayoutCrudRows(_flowVehicles);
-        colVeh.Controls.Add(_flowVehicles);
+        _lvVehicles = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, MultiSelect = false, HeaderStyle = ColumnHeaderStyle.Nonclickable };
+        _lvVehicles.Columns.Add("Fahrzeugnummer", 110);
+        _lvVehicles.Columns.Add("Fahrzeugeigenschaft", 130);
+        _lvVehicles.Columns.Add("Kennzeichen", 120);
+        _lvVehicles.Columns.Add("Info", 200);
+        _lvVehicles.Resize += (_, _) => ResizeListColumns(_lvVehicles);
+        _lvVehicles.MouseDoubleClick += (_, e) =>
+        {
+            if (_lvVehicles.GetItemAt(e.X, e.Y)?.Tag is Vehicle v) EditVehicle(v);
+        };
+        colVeh.Controls.Add(_lvVehicles);
         colVeh.Controls.Add(vehHeader);
         t2Grid.Controls.Add(colVeh, 2, 0);
 
@@ -216,12 +241,25 @@ public class MainForm : Form
 
         // ========== TAB 4: BAUSTELLEN ==========
         var tabSite = new TabPage("Baustellen");
-        _flowSites = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(4) };
-        _flowSites.Resize += (_, _) => RelayoutCrudRows(_flowSites);
+        _lvSites = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, MultiSelect = false, HeaderStyle = ColumnHeaderStyle.Nonclickable };
+        _lvSites.Columns.Add("Name", 160);
+        _lvSites.Columns.Add("Adresse", 200);
+        _lvSites.Columns.Add("Zeitraum", 160);
+        _lvSites.Columns.Add("Info", 200);
+        _lvSites.Resize += (_, _) => ResizeListColumns(_lvSites);
+        _lvSites.MouseDoubleClick += (_, e) =>
+        {
+            if (_lvSites.GetItemAt(e.X, e.Y)?.Tag is ConstructionSite s) EditSite(s);
+        };
         var siteBtns = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 30 };
         var btnSiteNew = new Button { Text = "Neu", Width = 75 }; btnSiteNew.Click += (_, _) => EditSite(null); StyleButton(btnSiteNew);
+        var btnSiteDel = new Button { Text = "Löschen", Width = 75 }; btnSiteDel.Click += (_, _) =>
+        {
+            if (_lvSites.SelectedItems.Count > 0 && _lvSites.SelectedItems[0].Tag is ConstructionSite s) DeleteSite(s);
+        }; StyleButton(btnSiteDel);
         siteBtns.Controls.Add(btnSiteNew);
-        tabSite.Controls.Add(_flowSites);
+        siteBtns.Controls.Add(btnSiteDel);
+        tabSite.Controls.Add(_lvSites);
         tabSite.Controls.Add(siteBtns);
         _tabControl.TabPages.Add(tabSite);
 
@@ -273,27 +311,38 @@ public class MainForm : Form
 
     private void RefreshVehicleList()
     {
-        _flowVehicles.Controls.Clear();
+        _lvVehicles.Items.Clear();
         foreach (var v in _vehicles)
         {
-            var text = v.ToString();
-            var row = MakeCrudRow(_flowVehicles.Width, text, () => DeleteVehicle(v),
-                onEdit: () => EditVehicle(v),
-                dragData: () => v);
-            _flowVehicles.Controls.Add(row);
+            var item = new ListViewItem(new[]
+            {
+                v.VehicleNumber,
+                v.RequiredLicense,
+                v.LicensePlate,
+                v.ToString()
+            })
+            { Tag = v };
+            _lvVehicles.Items.Add(item);
         }
+        ResizeListColumns(_lvVehicles);
     }
 
     private void RefreshSiteList()
     {
-        _flowSites.Controls.Clear();
+        _lvSites.Items.Clear();
         foreach (var s in _sites.OrderBy(s => s.Name))
         {
-            var text = s.DisplayText;
-            var row = MakeCrudRow(_flowSites.Width, text, () => DeleteSite(s),
-                onEdit: () => EditSite(s));
-            _flowSites.Controls.Add(row);
+            var item = new ListViewItem(new[]
+            {
+                s.Name,
+                s.Address,
+                s.EndDate.HasValue ? $"{s.StartDate:dd.MM.yy} – {s.EndDate.Value:dd.MM.yy}" : s.StartDate.ToString("dd.MM.yy"),
+                s.DisplayText
+            })
+            { Tag = s };
+            _lvSites.Items.Add(item);
         }
+        ResizeListColumns(_lvSites);
     }
 
     private Panel MakeCrudRow(int parentWidth, string text, Action onDelete, Action? onEdit = null, Func<object>? dragData = null)
@@ -314,6 +363,15 @@ public class MainForm : Form
         line.Controls.Add(lbl);
         line.Controls.Add(btnX);
         return line;
+    }
+
+    private static void ResizeListColumns(ListView lv)
+    {
+        if (lv.Columns.Count == 0) return;
+        var last = lv.Columns[lv.Columns.Count - 1];
+        var used = 0;
+        for (var i = 0; i < lv.Columns.Count - 1; i++) used += lv.Columns[i].Width;
+        last.Width = Math.Max(60, lv.ClientSize.Width - used - 4);
     }
 
     private void RefreshTeamView()
@@ -393,6 +451,7 @@ public class MainForm : Form
         }
         _vacations = _db.GetAllVacations();
         _sickness = _db.GetAllSickness();
+        BuildSpans();
         _calendarPanel.Invalidate();
     }
 
@@ -438,6 +497,9 @@ public class MainForm : Form
                 DrawDayCell(g, date, x, y, _calendarDayWidth, _calendarDayHeight, false);
             }
         }
+
+        // Continuous bars for multi-day assignments (one bar spanning all days)
+        DrawSpanBars(g);
 
         // Drag range highlight border
         if (_dragStartDate.HasValue && _dragEndDate.HasValue)
@@ -500,8 +562,9 @@ public class MainForm : Form
 
         foreach (var ta in teamAssignments)
         {
-            var team = ta.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == ta.TeamId.Value) ?? ta.Team! : ta.Team!;
             var site = ta.Site!;
+            if (_multiDayKeys.Contains($"T:{site.Id}:{ta.TeamId}")) continue;
+            var team = ta.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == ta.TeamId.Value) ?? ta.Team! : ta.Team!;
             connectedSiteIds.Add(site.Id);
             var color = team.Color;
             var vehicles = day.Where(a => a.Vehicle != null && a.ConstructionSiteId == site.Id)
@@ -513,15 +576,24 @@ public class MainForm : Form
 
         foreach (var site in day.Select(a => a.Site).OfType<ConstructionSite>()
                      .Where(s => !connectedSiteIds.Contains(s.Id)).DistinctBy(s => s.Id).OrderBy(s => s.Name))
+        {
+            if (_multiDayKeys.Contains($"S:{site.Id}")) continue;
             lines.Add((site.Name + SpanSuffix(site.Id, null, null, null), Color.White, Color.Black, Color.Black));
+        }
 
         foreach (var v in day.Select(a => a.Vehicle).OfType<Vehicle>()
                       .Where(v => !connectedSiteIds.Contains(v.Id == 0 ? -1 : day.First(a => a.Vehicle != null && a.Vehicle.Id == v.Id).ConstructionSiteId))
                       .DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber))
+        {
+            if (_multiDayKeys.Contains($"V:{v.Id}")) continue;
             lines.Add((v.VehicleNumber + SpanSuffix(null, null, v.Id, null), Color.White, Color.Black, Color.Black));
+        }
 
         foreach (var emp in day.Select(a => a.Employee).OfType<Employee>().DistinctBy(e => e.Id).OrderBy(e => e.FullName))
+        {
+            if (_multiDayKeys.Contains($"E:{emp.Id}")) continue;
             lines.Add(($"PN: {emp.FullName}{SpanSuffix(null, null, null, emp.Id)}", Color.White, Color.Black, Color.Black));
+        }
 
         // Vacation / Sickness (light gray bars)
         var grayFill = Color.FromArgb(0xEE, 0xEE, 0xEE);
@@ -586,6 +658,91 @@ public class MainForm : Form
         while (s.Length > 4 && g.MeasureString(s + "..", f).Width > maxWidth)
             s = s[..(s.Length - 1)];
         return s + "..";
+    }
+
+    private static string SpanKey(Assignment a)
+    {
+        if (a.TeamId.HasValue) return $"T:{a.ConstructionSiteId}:{a.TeamId}";
+        if (a.VehicleId.HasValue) return $"V:{a.VehicleId}";
+        if (a.EmployeeId.HasValue) return $"E:{a.EmployeeId}";
+        return $"S:{a.ConstructionSiteId}";
+    }
+
+    private void BuildSpans()
+    {
+        _spans.Clear();
+        _multiDayKeys.Clear();
+        var groups = _monthAssignments
+            .GroupBy(SpanKey)
+            .Where(g => g.Min(a => a.Date.Date) != g.Max(a => a.Date.Date))
+            .ToList();
+        foreach (var g in groups)
+        {
+            var min = g.Min(a => a.Date.Date);
+            var max = g.Max(a => a.Date.Date);
+            var sample = g.OrderBy(a => a.Date).First();
+            _spans.Add(new CalendarSpan
+            {
+                From = min,
+                To = max,
+                Label = SpanLabel(sample) + $" ({min:dd.MM.}–{max:dd.MM.})",
+                Fill = SpanFill(sample),
+                Border = SpanBorder(sample),
+                Text = SpanText(sample)
+            });
+            _multiDayKeys.Add(g.Key);
+        }
+    }
+
+    private string SpanLabel(Assignment a)
+    {
+        if (a.TeamId.HasValue)
+        {
+            var team = a.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == a.TeamId.Value) ?? a.Team! : a.Team!;
+            var site = a.Site!;
+            var vehicle = a.Vehicle;
+            var vehicleText = vehicle != null ? vehicle.VehicleNumber : "–";
+            return $"{site.Name} / {team.Name} / {vehicleText}";
+        }
+        if (a.VehicleId.HasValue) return a.Vehicle!.VehicleNumber;
+        if (a.EmployeeId.HasValue) return $"PN: {a.Employee!.FullName}";
+        return a.Site!.Name;
+    }
+
+    private Color SpanFill(Assignment a)
+    {
+        if (!a.TeamId.HasValue) return Color.White;
+        var t = _teams.FirstOrDefault(x => x.Id == a.TeamId.Value) ?? a.Team;
+        return t?.Color ?? Color.Gray;
+    }
+    private Color SpanBorder(Assignment a)
+    {
+        if (!a.TeamId.HasValue) return Color.Black;
+        var t = _teams.FirstOrDefault(x => x.Id == a.TeamId.Value) ?? a.Team;
+        return t?.Color ?? Color.Gray;
+    }
+    private static Color SpanText(Assignment a) => a.TeamId.HasValue ? Color.White : Color.Black;
+
+    private void DrawSpanBars(Graphics g)
+    {
+        using var sf = new Font(Font.FontFamily, 7);
+        foreach (var s in _spans)
+        {
+            var (x1, y1) = GetCellPosition(s.From);
+            var (x2, y2) = GetCellPosition(s.To);
+            if (x1 < 0 || x2 < 0) continue;
+            var barY = y1 + 16;
+            var barX = x1 + 2;
+            var barW = (x2 - x1) + _calendarDayWidth - 4;
+            var barH = 12;
+            using var fb = new SolidBrush(s.Fill);
+            g.FillRectangle(fb, barX, barY, barW, barH);
+            using var bp = new Pen(s.Border, 1);
+            g.DrawRectangle(bp, barX, barY, barW, barH);
+            var detail = FitText(g, sf, s.Label, barW - 4, 120);
+            using var tb = new SolidBrush(s.Text);
+            g.DrawString(detail, sf, tb, barX + 2, barY + 1);
+        }
     }
 
     private bool HasDayBlock(DateTime date)
