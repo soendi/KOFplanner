@@ -385,8 +385,8 @@ public class MainForm : Form
         PromptExpiredSites();
     }
 
-    // Asks once per session whether a Baustelle whose EndDate is more than a week in the
-    // past should be deleted (including all linked calendar entries).
+    // Asks once whether all Baustellen whose EndDate is more than a week in the past
+    // should be deleted (including their linked calendar entries).
     private void PromptExpiredSites()
     {
         var today = DateTime.Today;
@@ -394,15 +394,18 @@ public class MainForm : Form
             .Where(s => s.EndDate.HasValue && s.EndDate.Value.Date < today.AddDays(-7))
             .Where(s => !_expiredPrompted.Contains(s.Id))
             .ToList();
-        foreach (var s in expired)
+        if (expired.Count == 0) return;
+
+        foreach (var s in expired) _expiredPrompted.Add(s.Id); // ask only once per session
+
+        var list = string.Join("\n", expired.Select(s => $"  • {s.Name} ({s.EndDate.Value:dd.MM.yyyy})"));
+        var res = MessageBox.Show(
+            $"Folgende Baustellen sind seit mehr als einer Woche abgelaufen:\n\n{list}\n\n" +
+            "Sollen sie zusammen mit allen zugehörigen Kalendereinträgen gelöscht werden?",
+            "Abgelaufene Baustellen", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (res == DialogResult.Yes)
         {
-            _expiredPrompted.Add(s.Id); // do not ask again this session, regardless of answer
-            var res = MessageBox.Show(
-                $"Die Baustelle \"{s.Name}\" ist am {s.EndDate.Value:dd.MM.yyyy} abgelaufen (mehr als eine Woche her).\n" +
-                "Soll sie zusammen mit allen zugehörigen Kalendereinträgen gelöscht werden?",
-                "Abgelaufene Baustelle", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-            if (res == DialogResult.Yes)
-                DeleteSite(s); // removes the site and all linked assignments, then refreshes
+            foreach (var s in expired) DeleteSite(s); // removes each site and its linked assignments
         }
     }
 
