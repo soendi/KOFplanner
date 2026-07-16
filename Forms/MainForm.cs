@@ -11,6 +11,7 @@ public class MainForm : Form
     private readonly UpdateService _update;
     private readonly SettingsService _settings;
     private DateTime _currentMonth = new(DateTime.Now.Year, DateTime.Now.Month, 1);
+    private DateTime _weekStart = MondayOf(new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day));
     private bool _weekView;
     private DateTime? _hoverDate;
     private int _calendarDayWidth, _calendarDayHeight;
@@ -140,10 +141,10 @@ public class MainForm : Form
         btnNext.Click += (_, _) => Navigate(1);
         StyleButton(btnNext);
         var btnToday = new Button { Text = "Heute", Width = 60, Height = 28, Location = new Point(105, 6) };
-        btnToday.Click += (_, _) => { _currentMonth = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1); _dragStartDate = _dragEndDate = null; RefreshCalendar(); };
+        btnToday.Click += (_, _) => { _currentMonth = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1); _weekStart = MondayOf(DateTime.Today); _dragStartDate = _dragEndDate = null; RefreshCalendar(); };
         StyleButton(btnToday);
         var btnView = new Button { Text = "Wochenansicht", Width = 110, Height = 28, Location = new Point(175, 6) };
-        btnView.Click += (_, _) => { _weekView = !_weekView; btnView.Text = _weekView ? "Monatsansicht" : "Wochenansicht"; _dragStartDate = _dragEndDate = null; RefreshCalendar(); };
+        btnView.Click += (_, _) => { _weekView = !_weekView; if (_weekView) _weekStart = MondayOf(DateTime.Today); btnView.Text = _weekView ? "Monatsansicht" : "Wochenansicht"; _dragStartDate = _dragEndDate = null; RefreshCalendar(); };
         StyleButton(btnView);
         _lblMonthYear = new Label { Text = "", Location = new Point(300, 8), AutoSize = true, Font = new Font(Font.FontFamily, 12, FontStyle.Bold) };
         nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, btnView, _lblMonthYear });
@@ -445,9 +446,7 @@ public class MainForm : Form
     {
         if (_weekView)
         {
-            var monday = MondayOf(_currentMonth);
-            var target = monday.AddDays(step * 7);
-            _currentMonth = new DateTime(target.Year, target.Month, 1);
+            _weekStart = _weekStart.AddDays(step * 7);
             _dragStartDate = _dragEndDate = null;
             RefreshCalendar();
         }
@@ -469,7 +468,7 @@ public class MainForm : Form
     {
         if (_weekView)
         {
-            var mon = MondayOf(_currentMonth);
+            var mon = _weekStart;
             _lblMonthYear.Text = $"{mon:dd.MM.} – {mon.AddDays(6):dd.MM.yyyy}";
             _monthAssignments = _db.GetAllAssignments(mon, mon.AddDays(6));
         }
@@ -499,7 +498,7 @@ public class MainForm : Form
         DateTime gridStart;
         if (_weekView)
         {
-            gridStart = MondayOf(_currentMonth);
+            gridStart = _weekStart;
         }
         else
         {
@@ -801,7 +800,7 @@ public class MainForm : Form
     {
         if (_weekView)
         {
-            var mon = MondayOf(_currentMonth);
+            var mon = _weekStart;
             if (date < mon || date > mon.AddDays(6)) return (-1, -1);
             var idx = (date - mon).Days;
             return (_calendarOrigin.X + idx * _calendarDayWidth, _calendarOrigin.Y);
@@ -1302,6 +1301,15 @@ public class MainForm : Form
             f.Controls.Add(lb); f.Controls.Add(btn);
             f.ShowDialog();
             if (sel == null) return;
+            // Driver check: at least one team member must be allowed to drive the replacement.
+            var team = entry.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == entry.TeamId.Value) : null;
+            if (team != null && !string.IsNullOrEmpty(sel.RequiredLicense)
+                && !team.Members.Any(m => m.HasDriversLicense && m.GetLicenseList().Contains(sel.RequiredLicense)))
+            {
+                MessageBox.Show($"Kein Mitglied von Team \"{team.Name}\" darf Fahrzeug {sel.VehicleNumber} ({sel.RequiredLicense}) führen.",
+                    "Kein Fahrer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
             foreach (var r in rows) { r.VehicleId = sel.Id; _db.SaveAssignment(r); }
         }
         else
@@ -1437,7 +1445,20 @@ public class MainForm : Form
         f.Controls.Add(lb); f.Controls.Add(btn);
         f.ShowDialog();
         if (sel != null)
+        {
+            // Driver check: at least one team member must be allowed to drive the replacement.
+            var team = entry.TeamId.HasValue ? _teams.FirstOrDefault(t => t.Id == entry.TeamId.Value) : null;
+            if (team != null && !string.IsNullOrEmpty(sel.RequiredLicense)
+                && !team.Members.Any(m => m.HasDriversLicense && m.GetLicenseList().Contains(sel.RequiredLicense)))
+            {
+                MessageBox.Show($"Kein Mitglied von Team \"{team.Name}\" darf Fahrzeug {sel.VehicleNumber} ({sel.RequiredLicense}) führen.",
+                    "Kein Fahrer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                RefreshAllData();
+                owner.Close();
+                return;
+            }
             foreach (var r in rows) { r.VehicleId = sel.Id; _db.SaveAssignment(r); }
+        }
         RefreshAllData();
         owner.Close();
     }
@@ -1781,6 +1802,15 @@ public class MainForm : Form
     private bool CheckTeamDriver(Team team, Action rollback)
     {
         if (!team.PreferredVehicleId.HasValue) return true;
+        // A team without members cannot be assigned a vehicle.
+        if (team.Members.Count == 0)
+        {
+            MessageBox.Show($"Team \"{team.Name}\" hat keine Mitglieder. Ein Fahrzeug kann nur einem Team mit mindestens einem Mitglied zugeordnet werden.",
+                "Kein Fahrer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            team.PreferredVehicleId = null;
+            rollback();
+            return false;
+        }
         var veh = _vehicles.FirstOrDefault(v => v.Id == team.PreferredVehicleId.Value);
         if (veh == null) { team.PreferredVehicleId = null; return true; }
         var hasDriver = team.Members.Any(m => m.HasDriversLicense && m.GetLicenseList().Contains(veh.RequiredLicense));
@@ -1805,6 +1835,13 @@ public class MainForm : Form
 
     private void AssignVehicleToTeam(Team team, Vehicle veh)
     {
+        if (team.Members.Count == 0)
+        {
+            MessageBox.Show($"Team \"{team.Name}\" hat keine Mitglieder. Ein Fahrzeug kann nur einem Team mit mindestens einem Mitglied zugeordnet werden.",
+                "Kein Fahrer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            RefreshTeamView();
+            return;
+        }
         var oldId = team.PreferredVehicleId;
         team.PreferredVehicleId = veh.Id;
         if (!CheckTeamDriver(team, () => team.PreferredVehicleId = oldId))
@@ -2013,6 +2050,16 @@ public class MainForm : Form
         }
         team.Members.Remove(member);
         _db.SaveTeam(team);
+
+        // Last member removed -> ask whether to delete the (now empty) team.
+        if (team.Members.Count == 0)
+        {
+            if (MessageBox.Show($"Team \"{team.Name}\" hat keine Mitglieder mehr.\nTeam löschen?", "Team löschen",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                _db.DeleteTeam(team.Id);
+            }
+        }
         RefreshAllData();
     }
 
