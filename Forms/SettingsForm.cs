@@ -13,7 +13,8 @@ public class SettingsForm : Form
     public SettingsForm(SettingsService settings)
     {
         IconHelper.Apply(this);
-        var s = _settings.Load();
+        _settings = settings;
+        var s = settings.Load();
 
         Text = "Einstellungen";
         StartPosition = FormStartPosition.CenterParent;
