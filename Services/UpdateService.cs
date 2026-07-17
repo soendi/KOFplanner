@@ -63,28 +63,42 @@ public class UpdateService
 
     public async Task<bool> DownloadAndInstall(Version newVersion)
     {
-        try
+        var url = $"https://github.com/soendi/KOFplanner/releases/download/v{newVersion}/KOFplanner-Setup.exe";
+        var tempDir = Path.Combine(Path.GetTempPath(), "KOFplannerUpdate");
+        Directory.CreateDirectory(tempDir);
+        var installerPath = Path.Combine(tempDir, "KOFplanner-Setup.exe");
+
+        using (var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
         {
-            var url = $"https://github.com/soendi/KOFplanner/releases/download/v{newVersion}/KOFplanner-Setup.exe";
-            var tempDir = Path.Combine(Path.GetTempPath(), "KOFplannerUpdate");
-            Directory.CreateDirectory(tempDir);
-            var installerPath = Path.Combine(tempDir, "KOFplanner-Setup.exe");
-
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-            var data = await http.GetByteArrayAsync(url);
-            await File.WriteAllBytesAsync(installerPath, data);
-
-            var psi = new ProcessStartInfo
+            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode)
+                throw new Exception($"Download fehlgeschlagen (HTTP {(int)response.StatusCode}). Datei im Release nicht gefunden?");
+            var total = response.Content.Headers.ContentLength ?? -1L;
+            using var src = await response.Content.ReadAsStreamAsync();
+            using var dst = File.Create(installerPath);
+            var buffer = new byte[81920];
+            long read = 0;
+            int n;
+            while ((n = await src.ReadAsync(buffer)) > 0)
             {
-                FileName = installerPath,
-                Arguments = "/SILENT /CURRENTUSER",
-                UseShellExecute = true
-            };
-            Process.Start(psi);
-            return true;
+                await dst.WriteAsync(buffer.AsMemory(0, n));
+                read += n;
+                if (total > 0) DownloadProgress?.Invoke((double)read / total);
+            }
         }
-        catch { return false; }
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = installerPath,
+            Arguments = "/SILENT /CURRENTUSER",
+            UseShellExecute = true
+        };
+        Process.Start(psi);
+        return true;
     }
+
+    public event Action<double>? DownloadProgress;
+
 
     class UpdateInfo
     {

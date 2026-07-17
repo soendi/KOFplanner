@@ -3,7 +3,7 @@
 ; Version: 1.0.0.0
 
 #define MyAppName "KOFplanner"
-#define MyAppVersion "1.1.60.0"
+#define MyAppVersion "1.1.61.0"
 #define MyAppPublisher "Lukas Sonderegger"
 #define MyAppURL "https://github.com/soendi/KOFplanner"
 #define MyAppExeName "KOFplanner.exe"
@@ -17,7 +17,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName=C:\Programme\KOFplanner
+DefaultDirName={userpf}\KOFplanner
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=.
@@ -26,7 +26,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=Resources\KOFplanner.ico
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
 
 [Languages]

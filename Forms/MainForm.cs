@@ -2697,8 +2697,9 @@ public class MainForm : Form
     private async Task CheckUpdate()
     {
         var v = await _update.CheckForUpdate();
-        if (v == null) MessageBox.Show("Kein Update verfügbar.\nVersion ist aktuell.", "Update");
-        else if (ConfirmUpdate() && await _update.DownloadAndInstall(v)) Application.Exit();
+        if (v == null) { MessageBox.Show("Kein Update verfügbar.\nVersion ist aktuell.", "Update"); return; }
+        if (!ConfirmUpdate()) return;
+        await RunUpdate(v);
     }
 
     private async Task CheckUpdateSilent()
@@ -2706,9 +2707,33 @@ public class MainForm : Form
         try
         {
             var v = await _update.CheckForUpdate();
-            if (v != null && ConfirmUpdate() && await _update.DownloadAndInstall(v)) Application.Exit();
+            if (v == null || !ConfirmUpdate()) return;
+            await RunUpdate(v);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Update fehlgeschlagen: " + ex.Message, "Update", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private async Task RunUpdate(Version v)
+    {
+        using var prog = new UpdateProgressForm();
+        prog.Show();
+        _update.DownloadProgress += p => prog.SetProgress(p);
+        try
+        {
+            await _update.DownloadAndInstall(v);
+        }
+        catch (Exception ex)
+        {
+            prog.Close();
+            MessageBox.Show("Update fehlgeschlagen: " + ex.Message, "Update", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+        prog.Close();
+        // Alte Instanz beenden, damit das Setup die Dateien ersetzen kann.
+        Application.Exit();
     }
 
     // ====== SITE CRUD ======
