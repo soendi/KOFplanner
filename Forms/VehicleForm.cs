@@ -76,11 +76,11 @@ public class VehicleForm : Form
         var plate = _txtPlate.Text.Trim();
         var dup = _db.GetAllVehicles().FirstOrDefault(v =>
             v.Id != (_vehicle?.Id ?? 0) &&
-            (string.Equals(v.VehicleNumber, number, StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(v.LicensePlate, plate, StringComparison.OrdinalIgnoreCase)));
+            !string.IsNullOrWhiteSpace(plate) &&
+            string.Equals(v.LicensePlate, plate, StringComparison.OrdinalIgnoreCase));
         if (dup != null)
         {
-            MessageBox.Show($"Es existiert bereits ein Fahrzeug mit dieser Nummer oder diesem Kennzeichen:\n[{dup.RequiredLicense}] {dup.VehicleNumber} ({dup.LicensePlate})");
+            MessageBox.Show($"Es existiert bereits ein Fahrzeug mit diesem Kennzeichen:\n[{dup.RequiredLicense}] {dup.VehicleNumber} ({dup.LicensePlate})");
             DialogResult = DialogResult.None;
             return;
         }

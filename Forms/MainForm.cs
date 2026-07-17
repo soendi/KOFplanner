@@ -29,6 +29,7 @@ public class MainForm : Form
     private readonly List<CalendarSpan> _spans = new();
     private readonly HashSet<string> _multiDayKeys = new();
     private readonly HashSet<int> _spanAssignmentIds = new();
+    private readonly HashSet<DateTime> _selectedDates = new();
 
     private sealed class CalendarSpan
     {
@@ -113,6 +114,7 @@ public class MainForm : Form
         dateiMenu.DropDownItems.Add("Wiederkehrende Einsätze...", null, (_, _) => OpenRecurring());
         dateiMenu.DropDownItems.Add("Statistik / Auslastung...", null, (_, _) => OpenStatistics());
         dateiMenu.DropDownItems.Add("Export...", null, (_, _) => DoExport());
+        dateiMenu.DropDownItems.Add("Einsätze als iCal exportieren...", null, (_, _) => DoExportIcs());
         dateiMenu.DropDownItems.Add("Import...", null, (_, _) => DoImport());
         dateiMenu.DropDownItems.Add(new ToolStripSeparator());
         dateiMenu.DropDownItems.Add("Einstellungen...", null, (_, _) => OpenSettings());
@@ -158,6 +160,7 @@ public class MainForm : Form
         _calendarPanel.MouseUp += Calendar_MouseUp;
         _calendarPanel.MouseClick += Calendar_MouseClick;
         _calendarPanel.MouseDoubleClick += Calendar_MouseDoubleClick;
+        _calendarPanel.ContextMenuStrip = BuildCalendarContextMenu();
 
         var nav = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = SystemColors.Control };
         var btnPrev = new Button { Text = "<", Width = 40, Height = 28, Location = new Point(15, 6) };
@@ -472,6 +475,28 @@ public class MainForm : Form
         {
             MessageBox.Show("Import fehlgeschlagen: " + ex.Message, "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void DoExportIcs()
+    {
+        using var dlg = new SaveFileDialog
+        {
+            Filter = "iCalendar-Datei (*.ics)|*.ics",
+            FileName = "KOFplanner_Einsaetze.ics",
+            Title = "Einsätze als iCal exportieren"
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        var (from, until) = VisibleRange();
+        var ics = IcsExport.Build(_calAssignments, from, until);
+        System.IO.File.WriteAllText(dlg.FileName, ics, System.Text.Encoding.UTF8);
+        MessageBox.Show("iCal-Datei exportiert.", "Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private (DateTime from, DateTime until) VisibleRange()
+    {
+        if (_weekView) return (_weekStart, _weekStart.AddDays(6));
+        var gs = GridStartFor(_currentMonth);
+        return (gs, gs.AddDays(_twoMonthView ? 83 : 41));
     }
 
     private void PopulateEmployeeFilter()
@@ -889,10 +914,14 @@ public class MainForm : Form
     private void DrawDayCell(Graphics g, DateTime date, int x, int y, int cw, int ch, bool zoomed)
     {
         bool isToday = date == DateTime.Today;
+        bool hasBlock = HasDayBlock(date);
+        bool selected = _selectedDates.Contains(date.Date);
         var back = Color.White;
         if (isToday) back = Color.FromArgb(255, 229, 204); // hellorange
         else if (IsInDragRange(date)) back = Color.FromArgb(200, 220, 255);
+        else if (selected) back = Color.FromArgb(255, 240, 180); // Mehrfachauswahl: gelb
         else if (!IsFocusDate(date)) back = Color.FromArgb(0xD6, 0xE8, 0xF5); // außerhalb des Fokus-Monats: hellblau
+        else if (hasBlock) back = Color.FromArgb(225, 225, 225); // Urlaub/Krankheit: grau
         else if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) back = Color.FromArgb(248, 248, 248);
         using var bb = new SolidBrush(back);
         g.FillRectangle(bb, x, y, cw, ch);
@@ -904,6 +933,16 @@ public class MainForm : Form
         using var df = new Font(Font.FontFamily, zoomed ? 10 : 8);
         using var db2 = new SolidBrush(isToday ? Color.FromArgb(0xC8, 0x53, 0x00) : SystemColors.WindowText);
         g.DrawString(date.Day.ToString(), df, db2, x + 3, y + 2);
+
+        if (hasBlock)
+        {
+            // Kleiners "A/K"-Symbol oben rechts: Urlaub=blau, Krankheit=rot.
+            var isSick = _sickness.Any(s => date >= s.StartDate.Date && date <= s.EndDate.Date);
+            using var sf = new Font(Font.FontFamily, zoomed ? 9 : 7, FontStyle.Bold);
+            using var sb = new SolidBrush(isSick ? Color.FromArgb(0xC0, 0x00, 0x00) : Color.FromArgb(0x15, 0x65, 0xC0));
+            var tag = isSick ? "K" : "A";
+            g.DrawString(tag, sf, sb, x + cw - (zoomed ? 12 : 10), y + 2);
+        }
 
         var dayAssignments = _calAssignments.Where(a => a.Date.Date == date.Date).ToList();
         if (dayAssignments.Count > 0 || HasDayBlock(date))
@@ -1368,7 +1407,17 @@ public class MainForm : Form
             var d = GetDateFromPoint(e.Location);
             if (d.HasValue)
             {
-                _dragStartDate = _dragEndDate = d;
+                if (ModifierKeys.HasFlag(Keys.Control))
+                {
+                    // Mehrfachauswahl: Tag ein-/ausblenden.
+                    if (_selectedDates.Contains(d.Value.Date)) _selectedDates.Remove(d.Value.Date);
+                    else _selectedDates.Add(d.Value.Date);
+                }
+                else
+                {
+                    _selectedDates.Clear();
+                    _dragStartDate = _dragEndDate = d;
+                }
                 _calendarPanel.Invalidate();
             }
         }
@@ -1379,6 +1428,42 @@ public class MainForm : Form
         if (e.Button != MouseButtons.Left) return;
         var d = GetDateFromPoint(e.Location);
         if (d.HasValue) ShowDayOverview(d.Value);
+    }
+
+    private ContextMenuStrip BuildCalendarContextMenu()
+    {
+        var cms = new ContextMenuStrip();
+        var miDeleteSel = new ToolStripMenuItem("Ausgewählte Tage löschen");
+        miDeleteSel.Click += (_, _) => DeleteSelectedDays();
+        cms.Items.Add(miDeleteSel);
+        var miClearSel = new ToolStripMenuItem("Auswahl aufheben");
+        miClearSel.Click += (_, _) => { _selectedDates.Clear(); _calendarPanel.Invalidate(); };
+        cms.Items.Add(miClearSel);
+        cms.Opening += (_, e) =>
+        {
+            miDeleteSel.Enabled = _selectedDates.Count > 0;
+            if (_selectedDates.Count == 0)
+                cms.Items[0].Text = "Tage mit Strg+Klick auswählen";
+        };
+        return cms;
+    }
+
+    private void DeleteSelectedDays()
+    {
+        if (_selectedDates.Count == 0) return;
+        var days = _selectedDates.OrderBy(d => d).ToList();
+        var affected = _calAssignments.Where(a => days.Contains(a.Date.Date)).ToList();
+        if (affected.Count == 0)
+        {
+            MessageBox.Show("An den ausgewählten Tagen gibt es keine Einsätze zum Löschen.", "Hinweis", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (MessageBox.Show($"{affected.Count} Einsatz/Einsätze an {days.Count} Tag(en) wirklich löschen?", "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+        foreach (var a in affected)
+            if (a.Id > 0) _db.DeleteAssignment(a.Id);
+        _selectedDates.Clear();
+        RefreshAllData();
     }
 
     // ====== DATE RANGE POPUP ======

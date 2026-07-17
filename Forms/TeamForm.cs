@@ -244,7 +244,7 @@ public class TeamForm : Form
 
         var name = _txtName.Text.Trim();
         var dup = _db.GetAllTeams().FirstOrDefault(t =>
-            t.Id != _team.Id && string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+            t.Id != _team.Id && string.Equals(t.Name, name, StringComparison.CurrentCultureIgnoreCase));
         if (dup != null)
         {
             MessageBox.Show($"Es existiert bereits ein Team mit dem Namen \"{dup.Name}\".");

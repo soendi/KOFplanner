@@ -230,7 +230,7 @@ public class NotificationService
         p?.WaitForExit(30000);
     }
 
-    public bool SendEmail(string pdfPath, Employee emp, AppSettings settings)
+    public bool SendEmail(string pdfPath, Employee emp, AppSettings settings, string? icsPath = null)
     {
         var es = settings.Email;
         if (string.IsNullOrWhiteSpace(es.Server) || string.IsNullOrWhiteSpace(emp.Email)) return false;
@@ -244,6 +244,8 @@ public class NotificationService
             };
             mail.To.Add(emp.Email);
             mail.Attachments.Add(new Attachment(pdfPath));
+            if (icsPath != null && File.Exists(icsPath))
+                mail.Attachments.Add(new Attachment(icsPath));
             using var smtp = new SmtpClient(es.Server, es.Port)
             {
                 EnableSsl = es.UseSsl,

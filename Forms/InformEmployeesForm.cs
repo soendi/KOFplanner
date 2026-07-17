@@ -285,11 +285,17 @@ public class InformEmployeesForm : UserControl
             {
                 var pdf = _notify.GeneratePdf(emp, from, until, empAss);
                 if (ch.Print) _notify.PrintPdf(pdf, settings.PrinterName);
+                string? ics = null;
+                if (ch.Email)
+                {
+                    ics = Path.Combine(Path.GetTempPath(), $"Einsatzplan_{emp.Id}_{from:yyyyMMdd}_{until:yyyyMMdd}.ics");
+                    File.WriteAllText(ics, IcsExport.Build(empAss, from, until), System.Text.Encoding.UTF8);
+                }
                 if (ch.Email)
                 {
                     if (string.IsNullOrWhiteSpace(emp.Email))
                         Log($"{emp.FullName}: keine E-Mail-Adresse hinterlegt.");
-                    else if (_notify.SendEmail(pdf, emp, settings))
+                    else if (_notify.SendEmail(pdf, emp, settings, ics))
                         Log($"{emp.FullName}: E-Mail gesendet.");
                     else
                         Log($"{emp.FullName}: E-Mail fehlgeschlagen (SMTP-Einstellungen prüfen).");

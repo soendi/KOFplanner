@@ -71,12 +71,14 @@ public class SiteForm : Form
             return;
         }
         var name = _txtName.Text.Trim();
+        var address = _txtAddress.Text.Trim();
         var dup = _db.GetAllSites().FirstOrDefault(s =>
             s.Id != (_site?.Id ?? 0) &&
-            string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+            string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals((s.Address ?? "").Trim(), address, StringComparison.OrdinalIgnoreCase));
         if (dup != null)
         {
-            MessageBox.Show($"Es existiert bereits eine Baustelle mit dem Namen \"{dup.Name}\".");
+            MessageBox.Show($"Es existiert bereits eine Baustelle mit dem Namen \"{dup.Name}\" an der Adresse \"{dup.Address}\".");
             DialogResult = DialogResult.None;
             return;
         }
