@@ -940,7 +940,7 @@ public class MainForm : Form
             var isSick = _sickness.Any(s => date >= s.StartDate.Date && date <= s.EndDate.Date);
             using var sf = new Font(Font.FontFamily, zoomed ? 9 : 7, FontStyle.Bold);
             using var sb = new SolidBrush(isSick ? Color.FromArgb(0xC0, 0x00, 0x00) : Color.FromArgb(0x15, 0x65, 0xC0));
-            var tag = isSick ? "K" : "A";
+            var tag = isSick ? "K" : "U";
             g.DrawString(tag, sf, sb, x + cw - (zoomed ? 12 : 10), y + 2);
         }
 
@@ -1407,9 +1407,10 @@ public class MainForm : Form
             var d = GetDateFromPoint(e.Location);
             if (d.HasValue)
             {
-                if (ModifierKeys.HasFlag(Keys.Control))
+                if (ModifierKeys.HasFlag(Keys.Shift))
                 {
-                    // Mehrfachauswahl: Tag ein-/ausblenden.
+                    // Mehrfachauswahl (Shift+Klick): Tag ein-/ausblenden.
+                    // Strg+Klick bleibt fuer den Zuordnungs-Dialog reserviert.
                     if (_selectedDates.Contains(d.Value.Date)) _selectedDates.Remove(d.Value.Date);
                     else _selectedDates.Add(d.Value.Date);
                 }
@@ -1443,7 +1444,7 @@ public class MainForm : Form
         {
             miDeleteSel.Enabled = _selectedDates.Count > 0;
             if (_selectedDates.Count == 0)
-                cms.Items[0].Text = "Tage mit Strg+Klick auswählen";
+                cms.Items[0].Text = "Tage mit Umschalt+Klick auswählen";
         };
         return cms;
     }
