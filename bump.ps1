@@ -62,8 +62,21 @@ Set-Content $json $js
 
 # --- Git ---
 Set-Location $root
-git add -A
-git commit -q -m "$Message"
+
+function Invoke-Git {
+    param([scriptblock]$Cmd)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Cmd 2>&1 | ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { Write-Warning $_.Exception.Message } else { Write-Host $_ } }
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
+
+Invoke-Git { git add -A }
+if ((Invoke-Git { git commit -q -m $Message }) -ne 0) { throw "git commit fehlgeschlagen" }
 git tag -f "v$Version"
 
 if ($NoPush) {
@@ -71,6 +84,6 @@ if ($NoPush) {
     exit 0
 }
 
-git fetch origin master 2>&1 | Out-Null
-git push --atomic origin HEAD:master "v$Version"
+Invoke-Git { git fetch origin master }
+if ((Invoke-Git { git push --atomic origin HEAD:master "v$Version" }) -ne 0) { throw "git push fehlgeschlagen" }
 Write-Host "Gepusht: v$Version"
