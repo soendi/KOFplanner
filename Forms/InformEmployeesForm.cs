@@ -251,15 +251,21 @@ public class InformEmployeesForm : UserControl
     private void Inform()
     {
         var emps = CollectEmployees(out var filtered, out var from, out var until);
-        Log($"{emps.Count} Mitarbeiter im Zeitraum {from:dd.MM.yyyy} – {until:dd.MM.yyyy} gefunden.");
-        if (emps.Count == 0) { Log("Keine zugewiesenen Mitarbeiter im Zeitraum gefunden."); return; }
+        var teamMembers = _db.GetAllTeams().ToDictionary(t => t.Id, t => t.Members);
+        // Nur Mitarbeiter auflisten, die im gewählten Zeitraum auch tatsächlich
+        // mindestens einen Einsatz haben – sonst erscheint ein leeres Fenster.
+        var empsWithAssignments = emps.Where(e =>
+            filtered.Any(a => (a.EmployeeId.HasValue && a.EmployeeId.Value == e.Id) ||
+                              (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var mem) && mem.Any(m => m.Id == e.Id))))
+            .ToList();
+        Log($"{emps.Count} Mitarbeiter im Zeitraum {from:dd.MM.yyyy} – {until:dd.MM.yyyy} gefunden, {empsWithAssignments.Count} mit Einsatz.");
+        if (empsWithAssignments.Count == 0) { Log("Keine Mitarbeiter mit Einsätzen im gewählten Zeitraum gefunden."); return; }
 
-        using var preview = new InformPreviewForm(emps);
+        using var preview = new InformPreviewForm(empsWithAssignments);
         if (preview.ShowDialog(this) != DialogResult.OK) return;
 
         var choices = preview.Choices;
         var employees = _db.GetAllEmployees();
-        var teamMembers = _db.GetAllTeams().ToDictionary(t => t.Id, t => t.Members);
         var settings = _settings.Load();
 
         int done = 0, failed = 0;

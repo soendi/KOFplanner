@@ -72,10 +72,11 @@ public class VehicleForm : Form
             return;
         }
         var veh = _vehicle ?? new Vehicle();
-        veh.RequiredLicense = _cmbLicense.SelectedItem.ToString()!;
+        veh.RequiredLicense = _cmbLicense.Text.Trim();
         veh.VehicleNumber = _txtNumber.Text.Trim();
         veh.LicensePlate = _txtPlate.Text.Trim();
         veh.Seats = seats;
-        _db.SaveVehicle(veh);
+        try { _db.SaveVehicle(veh); }
+        catch (Exception ex) { MessageBox.Show("Fahrzeug konnte nicht gespeichert werden:\n" + ex.Message); DialogResult = DialogResult.None; }
     }
 }

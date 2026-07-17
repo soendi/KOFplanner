@@ -246,7 +246,8 @@ public class DatabaseService
             cmd.Parameters.AddWithValue("@vn", v.VehicleNumber);
             cmd.Parameters.AddWithValue("@lp", v.LicensePlate);
             cmd.Parameters.AddWithValue("@seats", v.Seats);
-            v.Id = (int)(long)cmd.ExecuteScalar()!;
+            var idObj = cmd.ExecuteScalar();
+            v.Id = idObj == null ? 0 : (int)(long)idObj;
         }
         else
         {

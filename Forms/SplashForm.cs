@@ -11,7 +11,7 @@ public class SplashForm : Form
     private readonly int _baseH;
     private int _elapsed;
     private const int HoldMs = 3000;
-    private const int FadeMs = 600;
+    private const int FadeMs = 300;
 
     public SplashForm(int durationMs = 2500)
     {
