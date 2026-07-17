@@ -142,9 +142,15 @@ public class NotificationService
                 g.DrawString(d.Day.ToString(), dayF, has ? Brushes.White : Brushes.Black, cx + 3, cy + 2);
                 if (has)
                 {
-                    var a = assignments.First(xx => xx.Date == d);
-                    var txt = a.Site?.Name ?? (a.Team?.Name ?? "?");
-                    g.DrawString(Truncate(txt, 14), dayF, Brushes.White, cx + 3, cy + 14);
+                    var dayItems = assignments.Where(xx => xx.Date.Date == d).Take(6).ToList();
+                    int ly = cy + 13;
+                    foreach (var a in dayItems)
+                    {
+                        var txt = a.Site?.Name ?? (a.Team?.Name ?? "?");
+                        g.DrawString(Truncate(txt, 14), dayF, Brushes.White, cx + 3, ly);
+                        ly += 11;
+                        if (ly > cy + cellH - 2) break;
+                    }
                 }
             }
         }
