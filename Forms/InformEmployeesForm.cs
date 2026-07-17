@@ -289,7 +289,7 @@ public class InformEmployeesForm : UserControl
                 if (ch.Email)
                 {
                     ics = Path.Combine(Path.GetTempPath(), $"Einsatzplan_{emp.Id}_{from:yyyyMMdd}_{until:yyyyMMdd}.ics");
-                    File.WriteAllText(ics, IcsExport.Build(empAss, from, until), System.Text.Encoding.UTF8);
+                    File.WriteAllText(ics, IcsExport.Build(empAss, from, until), new System.Text.UTF8Encoding(false));
                 }
                 if (ch.Email)
                 {

@@ -4,18 +4,19 @@ using System.Text;
 
 namespace KOFplanner.Services;
 
-// Erzeugt eine iCalendar-Datei (.ics) aus Einsätzen, damit MA sie in
+// Erzeugt eine iCalendar-Datei (.ics) aus Einsaetzen, damit MA sie in
 // Outlook / Handy / Google Calendar importieren koennen.
+// RFC 5545: Zeilenende MUSS CRLF sein, lange Zeilen werden gefaltet.
 public static class IcsExport
 {
     public static string Build(List<Assignment> assignments, DateTime from, DateTime until)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("BEGIN:VCALENDAR");
-        sb.AppendLine("VERSION:2.0");
-        sb.AppendLine("PRODID:-//KOFplanner//DE");
-        sb.AppendLine("CALSCALE:GREGORIAN");
-        sb.AppendLine("METHOD:PUBLISH");
+        AppendLine(sb, "BEGIN:VCALENDAR");
+        AppendLine(sb, "VERSION:2.0");
+        AppendLine(sb, "PRODID:-//KOFplanner//Baustellenplanung//DE");
+        AppendLine(sb, "CALSCALE:GREGORIAN");
+        AppendLine(sb, "METHOD:PUBLISH");
 
         foreach (var a in assignments)
         {
@@ -27,22 +28,52 @@ public static class IcsExport
             if (a.Vehicle != null) desc.Add("Fahrzeug: " + a.Vehicle.VehicleNumber);
             if (a.Employee != null) desc.Add("Mitarbeiter: " + a.Employee.FullName);
 
-            var dayEnd = a.Date.Date.AddHours(23).AddMinutes(59);
-            sb.AppendLine("BEGIN:VEVENT");
-            sb.AppendLine("UID:" + $"{a.Id}@{a.Date:yyyyMMdd}@kofplanner");
-            sb.AppendLine("DTSTAMP:" + ToIcs(DateTime.Now));
-            sb.AppendLine("DTSTART;VALUE=DATE:" + a.Date.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
-            sb.AppendLine("DTEND;VALUE=DATE:" + a.Date.AddDays(1).ToString("yyyyMMdd", CultureInfo.InvariantCulture));
-            sb.AppendLine("SUMMARY:" + Escape(siteName));
-            if (loc.Length > 0) sb.AppendLine("LOCATION:" + Escape(loc));
-            if (desc.Count > 0) sb.AppendLine("DESCRIPTION:" + Escape(string.Join(" | ", desc)));
-            sb.AppendLine("END:VEVENT");
+            var uid = $"kofplanner-{a.Id}-{a.Date:yyyyMMdd}";
+            AppendLine(sb, "BEGIN:VEVENT");
+            AppendLine(sb, "UID:" + uid);
+            AppendLine(sb, "DTSTAMP:" + ToIcs(DateTime.Now));
+            AppendLine(sb, "DTSTART;VALUE=DATE:" + a.Date.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
+            AppendLine(sb, "DTEND;VALUE=DATE:" + a.Date.AddDays(1).ToString("yyyyMMdd", CultureInfo.InvariantCulture));
+            AppendLine(sb, "SUMMARY:" + Fold(Escape(siteName)));
+            if (loc.Length > 0) AppendLine(sb, "LOCATION:" + Fold(Escape(loc)));
+            if (desc.Count > 0) AppendLine(sb, "DESCRIPTION:" + Fold(Escape(string.Join(" | ", desc))));
+            AppendLine(sb, "END:VEVENT");
         }
 
-        sb.AppendLine("END:VCALENDAR");
+        AppendLine(sb, "END:VCALENDAR");
         return sb.ToString();
     }
 
+    // Jede Zeile mit CRLF beenden (Google/L Outlook strikt).
+    private static void AppendLine(StringBuilder sb, string line) => sb.Append(line).Append("\r\n");
+
+    // Laengere Inhalte auf <= 75 Oktette falten (RFC 5545 3.1).
+    private static string Fold(string content)
+    {
+        if (content.Length <= 75) return content;
+        var result = new StringBuilder();
+        result.Append(content, 0, 75);
+        int i = 75;
+        while (i < content.Length)
+        {
+            result.Append("\r\n ");
+            int take = Math.Min(74, content.Length - i);
+            result.Append(content, i, take);
+            i += take;
+        }
+        return result.ToString();
+    }
+
     private static string ToIcs(DateTime dt) => dt.ToUniversalTime().ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
-    private static string Escape(string s) => s.Replace("\\", "\\\\").Replace(";", "\\;").Replace(",", "\\,").Replace("\n", "\\n");
+
+    private static string Escape(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return s.Replace("\\", "\\\\")
+                .Replace(";", "\\;")
+                .Replace(",", "\\,")
+                .Replace("\r\n", "\\n")
+                .Replace("\n", "\\n")
+                .Replace("\r", "\\n");
+    }
 }

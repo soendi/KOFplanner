@@ -488,7 +488,7 @@ public class MainForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         var (from, until) = VisibleRange();
         var ics = IcsExport.Build(_calAssignments, from, until);
-        System.IO.File.WriteAllText(dlg.FileName, ics, System.Text.Encoding.UTF8);
+        System.IO.File.WriteAllText(dlg.FileName, ics, new System.Text.UTF8Encoding(false));
         MessageBox.Show("iCal-Datei exportiert.", "Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
