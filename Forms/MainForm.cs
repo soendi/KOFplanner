@@ -531,12 +531,12 @@ public class MainForm : Form
     private void RefreshAllData()
     {
         _employees = _db.GetAllEmployees().OrderBy(e => e.FullName, StringComparer.CurrentCultureIgnoreCase).ToList();
-        PopulateEmployeeFilter();
         _teams = _db.GetAllTeams();
         _vehicles = _db.GetAllVehicles().OrderBy(v => v.VehicleNumber, StringComparer.CurrentCultureIgnoreCase).ToList();
         _sites = _db.GetAllSites();
         _vacations = _db.GetAllVacations();
         _sickness = _db.GetAllSickness();
+        PopulateEmployeeFilter();
 
         _lvEmployees.Items.Clear();
         foreach (var e in _employees)
