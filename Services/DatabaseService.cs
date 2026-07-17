@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
 using KOFplanner.Models;
+using System.Linq;
+using System.Text.Json;
 
 namespace KOFplanner.Services;
 
@@ -151,6 +153,30 @@ public class DatabaseService
             c7.ExecuteNonQuery();
             using var up = conn.CreateCommand();
             up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (5)";
+            up.ExecuteNonQuery();
+        }
+
+        if (version < 6)
+        {
+            using var c8 = conn.CreateCommand();
+            c8.CommandText = @"
+                CREATE TABLE IF NOT EXISTS RecurringPatterns (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ConstructionSiteId INTEGER NOT NULL,
+                    TeamId INTEGER,
+                    VehicleId INTEGER,
+                    EmployeeId INTEGER,
+                    Weekdays TEXT NOT NULL,
+                    StartDate TEXT NOT NULL,
+                    EndDate TEXT,
+                    FOREIGN KEY(ConstructionSiteId) REFERENCES ConstructionSites(Id) ON DELETE CASCADE,
+                    FOREIGN KEY(TeamId) REFERENCES Teams(Id) ON DELETE SET NULL,
+                    FOREIGN KEY(VehicleId) REFERENCES Vehicles(Id) ON DELETE SET NULL,
+                    FOREIGN KEY(EmployeeId) REFERENCES Employees(Id) ON DELETE SET NULL
+                )";
+            c8.ExecuteNonQuery();
+            using var up = conn.CreateCommand();
+            up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (6)";
             up.ExecuteNonQuery();
         }
     }
@@ -674,6 +700,18 @@ public class DatabaseService
                 a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(14), LastName = r.GetString(15) };
             list.Add(a);
         }
+
+        // Wiederkehrende Muster expandieren (ohne Doppelbelegung zu bestehenden Einsätzen).
+        var sitesById = GetAllSites().ToDictionary(s => s.Id, s => s);
+        var existing = new HashSet<string>(list.Select(a =>
+            $"{a.Date:yyyy-MM-dd}|{a.ConstructionSiteId}|{a.TeamId}|{a.EmployeeId}"));
+        foreach (var ra in ExpandRecurring(from, until))
+        {
+            var key = $"{ra.Date:yyyy-MM-dd}|{ra.ConstructionSiteId}|{ra.TeamId}|{ra.EmployeeId}";
+            if (existing.Contains(key)) continue;
+            ra.Site = sitesById.TryGetValue(ra.ConstructionSiteId, out var s) ? s : null;
+            list.Add(ra);
+        }
         return list;
     }
 
@@ -711,6 +749,101 @@ public class DatabaseService
         cmd.CommandText = "DELETE FROM Assignments WHERE Id=@id";
         cmd.Parameters.AddWithValue("@id", id);
         cmd.ExecuteNonQuery();
+    }
+
+    // --- Recurring patterns ---
+    public List<RecurringPattern> GetAllRecurringPatterns()
+    {
+        var list = new List<RecurringPattern>();
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Id, ConstructionSiteId, TeamId, VehicleId, EmployeeId, Weekdays, StartDate, EndDate FROM RecurringPatterns";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var days = new HashSet<DayOfWeek>();
+            foreach (var part in r.GetString(5).Split(','))
+                if (int.TryParse(part, out var d) && d >= 0 && d <= 6) days.Add((DayOfWeek)d);
+            list.Add(new RecurringPattern
+            {
+                Id = r.GetInt32(0),
+                ConstructionSiteId = r.GetInt32(1),
+                TeamId = r.IsDBNull(2) ? null : r.GetInt32(2),
+                VehicleId = r.IsDBNull(3) ? null : r.GetInt32(3),
+                EmployeeId = r.IsDBNull(4) ? null : r.GetInt32(4),
+                Weekdays = days,
+                StartDate = DateTime.Parse(r.GetString(6)),
+                EndDate = r.IsDBNull(7) ? null : DateTime.Parse(r.GetString(7))
+            });
+        }
+        return list;
+    }
+
+    public void SaveRecurringPattern(RecurringPattern p)
+    {
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        if (p.Id == 0)
+        {
+            cmd.CommandText = "INSERT INTO RecurringPatterns (ConstructionSiteId, TeamId, VehicleId, EmployeeId, Weekdays, StartDate, EndDate) VALUES (@cs, @t, @v, @e, @w, @s, @u); SELECT last_insert_rowid()";
+            cmd.Parameters.AddWithValue("@cs", p.ConstructionSiteId);
+            cmd.Parameters.AddWithValue("@t", (object?)p.TeamId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@v", (object?)p.VehicleId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@e", (object?)p.EmployeeId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@w", p.WeekdaysToken);
+            cmd.Parameters.AddWithValue("@s", p.StartDate.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("@u", (object?)p.EndDate?.ToString("yyyy-MM-dd") ?? DBNull.Value);
+            var idObj = cmd.ExecuteScalar();
+            p.Id = idObj == null ? 0 : (int)(long)idObj;
+        }
+        else
+        {
+            cmd.CommandText = "UPDATE RecurringPatterns SET ConstructionSiteId=@cs, TeamId=@t, VehicleId=@v, EmployeeId=@e, Weekdays=@w, StartDate=@s, EndDate=@u WHERE Id=@id";
+            cmd.Parameters.AddWithValue("@cs", p.ConstructionSiteId);
+            cmd.Parameters.AddWithValue("@t", (object?)p.TeamId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@v", (object?)p.VehicleId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@e", (object?)p.EmployeeId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@w", p.WeekdaysToken);
+            cmd.Parameters.AddWithValue("@s", p.StartDate.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("@u", (object?)p.EndDate?.ToString("yyyy-MM-dd") ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@id", p.Id);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public void DeleteRecurringPattern(int id)
+    {
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM RecurringPatterns WHERE Id=@id";
+        cmd.Parameters.AddWithValue("@id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    // Expandiert wiederkehrende Muster zu konkreten Assignments im Bereich.
+    public List<Assignment> ExpandRecurring(DateTime from, DateTime until)
+    {
+        var result = new List<Assignment>();
+        foreach (var p in GetAllRecurringPatterns())
+        {
+            var start = p.StartDate.Date > from ? p.StartDate.Date : from;
+            var end = (p.EndDate?.Date ?? until) < until ? (p.EndDate?.Date ?? until) : until;
+            for (var d = start; d <= end; d = d.AddDays(1))
+            {
+                if (p.Weekdays.Contains(d.DayOfWeek))
+                {
+                    result.Add(new Assignment
+                    {
+                        ConstructionSiteId = p.ConstructionSiteId,
+                        TeamId = p.TeamId,
+                        VehicleId = p.VehicleId,
+                        EmployeeId = p.EmployeeId,
+                        Date = d
+                    });
+                }
+            }
+        }
+        return result;
     }
 
     // --- Conflict checks ---
@@ -956,4 +1089,84 @@ public class DatabaseService
             if (r.GetInt32(0) > 0) return true;
         return false;
     }
+
+    // --- Export / Import ---
+    public string ExportAll()
+    {
+        var dto = new ExportDto
+        {
+            Employees = GetAllEmployees(),
+            Teams = GetAllTeams(),
+            Vehicles = GetAllVehicles(),
+            Sites = GetAllSites(),
+            Assignments = GetAllAssignments(DateTime.MinValue, DateTime.MaxValue),
+            Recurring = GetAllRecurringPatterns(),
+            Vacations = GetAllVacations(),
+            Sickness = GetAllSickness()
+        };
+        return JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    public void ImportAll(string json)
+    {
+        var dto = JsonSerializer.Deserialize<ExportDto>(json);
+        if (dto == null) return;
+        using var conn = GetConnection();
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            // Stammdaten ergaenzen (kein Loeschen bestehender Daten).
+            foreach (var e in dto.Employees ?? new()) if (e.Id == 0 || GetEmployeeOrNull(e.Id) == null) SaveEmployee(e);
+            foreach (var t in dto.Teams ?? new()) if (t.Id == 0 || GetTeamOrNull(t.Id) == null) SaveTeam(t);
+            foreach (var v in dto.Vehicles ?? new()) if (v.Id == 0 || GetVehicleOrNull(v.Id) == null) SaveVehicle(v);
+            foreach (var s in dto.Sites ?? new()) if (s.Id == 0 || GetSiteOrNull(s.Id) == null) SaveSite(s);
+            foreach (var a in dto.Assignments ?? new()) if (a.Id == 0 || !AssignmentExists(a.Id)) SaveAssignment(a);
+            foreach (var p in dto.Recurring ?? new()) if (p.Id == 0) SaveRecurringPattern(p);
+            foreach (var v in dto.Vacations ?? new()) if (v.Id == 0) SaveVacation(v);
+            foreach (var s in dto.Sickness ?? new()) if (s.Id == 0) SaveSickness(s);
+            tx.Commit();
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
+    }
+
+    private Employee? GetEmployeeOrNull(int id)
+    {
+        try { return GetAllEmployees().FirstOrDefault(e => e.Id == id); } catch { return null; }
+    }
+    private Team? GetTeamOrNull(int id)
+    {
+        try { return GetAllTeams().FirstOrDefault(t => t.Id == id); } catch { return null; }
+    }
+    private Vehicle? GetVehicleOrNull(int id)
+    {
+        try { return GetAllVehicles().FirstOrDefault(v => v.Id == id); } catch { return null; }
+    }
+    private ConstructionSite? GetSiteOrNull(int id)
+    {
+        try { return GetAllSites().FirstOrDefault(s => s.Id == id); } catch { return null; }
+    }
+    private bool AssignmentExists(int id)
+    {
+        using var conn = GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM Assignments WHERE Id=@id";
+        cmd.Parameters.AddWithValue("@id", id);
+        return (long)cmd.ExecuteScalar()! > 0;
+    }
+}
+
+public class ExportDto
+{
+    public List<Employee>? Employees { get; set; }
+    public List<Team>? Teams { get; set; }
+    public List<Vehicle>? Vehicles { get; set; }
+    public List<ConstructionSite>? Sites { get; set; }
+    public List<Assignment>? Assignments { get; set; }
+    public List<RecurringPattern>? Recurring { get; set; }
+    public List<Vacation>? Vacations { get; set; }
+    public List<Sickness>? Sickness { get; set; }
 }

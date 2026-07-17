@@ -242,10 +242,20 @@ public class TeamForm : Form
             return;
         }
 
+        var name = _txtName.Text.Trim();
+        var dup = _db.GetAllTeams().FirstOrDefault(t =>
+            t.Id != _team.Id && string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (dup != null)
+        {
+            MessageBox.Show($"Es existiert bereits ein Team mit dem Namen \"{dup.Name}\".");
+            DialogResult = DialogResult.None;
+            return;
+        }
+
         var originalMembers = _team.Members.ToList();
         var originalVehicle = _team.PreferredVehicleId;
 
-        _team.Name = _txtName.Text.Trim();
+        _team.Name = name;
         _team.ColorArgb = _selectedColor.ToArgb();
         _team.Members = _lbMembers.Items.Cast<Employee>().ToList();
 

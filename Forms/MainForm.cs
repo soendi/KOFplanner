@@ -1,6 +1,8 @@
 using KOFplanner.Models;
 using KOFplanner.Services;
+using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Printing;
 
 namespace KOFplanner.Forms;
 
@@ -45,6 +47,9 @@ public class MainForm : Form
     private ComboBox _cmbEmployeeFilter = null!;
     private ComboBox _cmbSiteFilter = null!;
     private ComboBox _cmbTeamFilter = null!;
+    private TextBox _txtSearchEmp = null!;
+    private TextBox _txtSearchVeh = null!;
+    private TextBox _txtSearchSite = null!;
 
     // Sites whose "delete expired?" question was already shown this session (avoid nagging
     // on every refresh once the user answered).
@@ -104,6 +109,11 @@ public class MainForm : Form
         dateiMenu!.DropDownItems.Add("Datenbank sichern...", null, async (_, _) => await DoBackup());
         dateiMenu.DropDownItems.Add("Datenbank wiederherstellen...", null, (_, _) => RestoreDatabase());
         dateiMenu.DropDownItems.Add("Google Drive Backup...", null, (_, _) => ConfigureBackup());
+        dateiMenu.DropDownItems.Add(new ToolStripSeparator());
+        dateiMenu.DropDownItems.Add("Wiederkehrende Einsätze...", null, (_, _) => OpenRecurring());
+        dateiMenu.DropDownItems.Add("Statistik / Auslastung...", null, (_, _) => OpenStatistics());
+        dateiMenu.DropDownItems.Add("Export...", null, (_, _) => DoExport());
+        dateiMenu.DropDownItems.Add("Import...", null, (_, _) => DoImport());
         dateiMenu.DropDownItems.Add(new ToolStripSeparator());
         dateiMenu.DropDownItems.Add("Einstellungen...", null, (_, _) => OpenSettings());
         dateiMenu.DropDownItems.Add(new ToolStripSeparator());
@@ -183,13 +193,19 @@ public class MainForm : Form
             _filterSiteId = _cmbSiteFilter.SelectedValue is int id && id > 0 ? id : null;
             RefreshCalendar();
         };
-        _cmbTeamFilter = new ComboBox { Location = new Point(846, 8), Width = 170, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 9) };
+        _cmbTeamFilter = new ComboBox { Location = new Point(846, 8), Width = 150, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font(Font.FontFamily, 9) };
         _cmbTeamFilter.SelectedIndexChanged += (_, _) =>
         {
             _filterTeamId = _cmbTeamFilter.SelectedValue is int id && id > 0 ? id : null;
             RefreshCalendar();
         };
-        nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, btnView, _lblMonthYear, lblFilter, _cmbEmployeeFilter, _cmbSiteFilter, _cmbTeamFilter });
+        var btnResetFilter = new Button { Text = "Filter zurücksetzen", Location = new Point(1002, 8), Width = 130, Height = 23, FlatStyle = FlatStyle.Flat, Font = new Font(Font.FontFamily, 9) };
+        btnResetFilter.Click += (_, _) => ResetFilters();
+        StyleButton(btnResetFilter);
+        var btnPrintCal = new Button { Text = "Kalender drucken", Location = new Point(1138, 8), Width = 120, Height = 23, FlatStyle = FlatStyle.Flat, Font = new Font(Font.FontFamily, 9) };
+        btnPrintCal.Click += (_, _) => PrintCalendar();
+        StyleButton(btnPrintCal);
+        nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, btnView, _lblMonthYear, lblFilter, _cmbEmployeeFilter, _cmbSiteFilter, _cmbTeamFilter, btnResetFilter, btnPrintCal });
         tabKalender.Controls.Add(_calendarPanel);
         tabKalender.Controls.Add(nav);
         _tabControl.TabPages.Add(tabKalender);
@@ -204,8 +220,12 @@ public class MainForm : Form
 
         // ---- Spalte 1: Mitarbeiter ----
         var colEmp = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 4, 0) };
-        var empHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
-        empHeader.Controls.Add(new Label { Text = "Mitarbeiter", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
+        var empHeader = new Panel { Dock = DockStyle.Top, Height = 72 };
+        empHeader.Controls.Add(new Label { Text = "Mitarbeiter", Dock = DockStyle.Top, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
+        _txtSearchEmp = new TextBox { Dock = DockStyle.Bottom, Width = 200 };
+        _txtSearchEmp.PlaceholderText = "Suche…";
+        _txtSearchEmp.TextChanged += (_, _) => RefreshEmployeeList();
+        empHeader.Controls.Add(_txtSearchEmp);
         var empBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
         var btnEmpNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnEmpNew.Click += (_, _) => EditEmployee(null); StyleButton(btnEmpNew);
         var btnEmpDel = new Button { Text = "Löschen", Width = 100, Height = 28 }; btnEmpDel.Click += (_, _) => { if (_lvEmployees.SelectedItems.Count > 0 && _lvEmployees.SelectedItems[0].Tag is Employee e) DeleteEmployee(e); }; StyleButton(btnEmpDel);
@@ -265,8 +285,12 @@ public class MainForm : Form
 
         // ---- Spalte 3: Fahrzeuge ----
         var colVeh = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 0, 0, 0) };
-        var vehHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
-        vehHeader.Controls.Add(new Label { Text = "Fahrzeuge", Dock = DockStyle.Left, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
+        var vehHeader = new Panel { Dock = DockStyle.Top, Height = 72 };
+        vehHeader.Controls.Add(new Label { Text = "Fahrzeuge", Dock = DockStyle.Top, AutoSize = true, Font = new Font(Font.FontFamily, 11, FontStyle.Bold), Padding = new Padding(0, 6, 0, 0) });
+        _txtSearchVeh = new TextBox { Dock = DockStyle.Bottom, Width = 200 };
+        _txtSearchVeh.PlaceholderText = "Suche…";
+        _txtSearchVeh.TextChanged += (_, _) => RefreshVehicleList();
+        vehHeader.Controls.Add(_txtSearchVeh);
         var vehBtns = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Padding = new Padding(0) };
         var btnVehNew = new Button { Text = "Neu", Width = 80, Height = 28 }; btnVehNew.Click += (_, _) => EditVehicle(null); StyleButton(btnVehNew);
         var btnVehDel = new Button { Text = "Löschen", Width = 80, Height = 28 }; btnVehDel.Click += (_, _) =>
@@ -346,7 +370,13 @@ public class MainForm : Form
         }; StyleButton(btnSiteDel);
         siteBtns.Controls.Add(btnSiteNew);
         siteBtns.Controls.Add(btnSiteDel);
-        tabSite.Controls.Add(_lvSites);
+        _txtSearchSite = new TextBox { Dock = DockStyle.Top, Width = 200 };
+        _txtSearchSite.PlaceholderText = "Suche…";
+        _txtSearchSite.TextChanged += (_, _) => RefreshSiteList();
+        var siteContainer = new Panel { Dock = DockStyle.Fill };
+        siteContainer.Controls.Add(_lvSites);
+        siteContainer.Controls.Add(_txtSearchSite);
+        tabSite.Controls.Add(siteContainer);
         tabSite.Controls.Add(siteBtns);
         _tabControl.TabPages.Add(tabSite);
 
@@ -380,6 +410,70 @@ public class MainForm : Form
         f.ShowDialog(this);
     }
 
+    private void OpenRecurring()
+    {
+        using var f = new RecurringManagerForm(_db);
+        if (f.ShowDialog(this) == DialogResult.OK) RefreshAllData();
+    }
+
+    private void OpenStatistics()
+    {
+        using var f = new StatisticsForm(_db);
+        f.ShowDialog(this);
+    }
+
+    private void DoExport()
+    {
+        using var dlg = new SaveFileDialog
+        {
+            Filter = "CSV-Datei (*.csv)|*.csv|JSON-Datei (*.json)|*.json",
+            FileName = "KOFplanner_Export.csv",
+            Title = "Daten exportieren"
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var json = _db.ExportAll();
+            if (dlg.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                System.IO.File.WriteAllText(dlg.FileName, json);
+            }
+            else
+            {
+                System.IO.File.WriteAllText(dlg.FileName, DataExport.ToCsv(json), System.Text.Encoding.UTF8);
+            }
+            MessageBox.Show("Export abgeschlossen.", "Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Export fehlgeschlagen: " + ex.Message, "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void DoImport()
+    {
+        using var dlg = new OpenFileDialog
+        {
+            Filter = "CSV- oder JSON-Datei (*.csv;*.json)|*.csv;*.json",
+            Title = "Daten importieren"
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var content = System.IO.File.ReadAllText(dlg.FileName, System.Text.Encoding.UTF8);
+            var json = dlg.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                ? content
+                : DataExport.FromCsv(content);
+            _db.ImportAll(json);
+            RefreshAllData();
+            MessageBox.Show("Import abgeschlossen. Stammdaten wurden übernommen.", "Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Import fehlgeschlagen: " + ex.Message, "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private void PopulateEmployeeFilter()
     {
         FillFilter(_cmbEmployeeFilter, _filterEmployeeId, "Alle Mitarbeiter",
@@ -388,6 +482,38 @@ public class MainForm : Form
             _sites.OrderBy(s => s.Name).Select(s => (object)new { Id = s.Id, Text = s.Name }).ToList());
         FillFilter(_cmbTeamFilter, _filterTeamId, "Alle Teams",
             _teams.OrderBy(t => t.Name).Select(t => (object)new { Id = t.Id, Text = t.Name }).ToList());
+    }
+
+    private void ResetFilters()
+    {
+        _filterEmployeeId = null;
+        _filterSiteId = null;
+        _filterTeamId = null;
+        if (_cmbEmployeeFilter.Items.Count > 0) _cmbEmployeeFilter.SelectedValue = 0;
+        if (_cmbSiteFilter.Items.Count > 0) _cmbSiteFilter.SelectedValue = 0;
+        if (_cmbTeamFilter.Items.Count > 0) _cmbTeamFilter.SelectedValue = 0;
+        RefreshCalendar();
+    }
+
+    private void PrintCalendar()
+    {
+        if (_calendarPanel == null) return;
+        using var bmp = new Bitmap(_calendarPanel.Width, _calendarPanel.Height);
+        _calendarPanel.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+        using var pd = new PrintDocument();
+        pd.DefaultPageSettings.Landscape = bmp.Width > bmp.Height;
+        pd.PrintPage += (_, e) =>
+        {
+            var margin = e.MarginBounds;
+            var scale = Math.Min((float)margin.Width / bmp.Width, (float)margin.Height / bmp.Height);
+            var w = (int)(bmp.Width * scale);
+            var h = (int)(bmp.Height * scale);
+            var x = margin.Left + (margin.Width - w) / 2;
+            var y = margin.Top + (margin.Height - h) / 2;
+            e.Graphics.DrawImage(bmp, x, y, w, h);
+        };
+        using var preview = new PrintPreviewDialog { Document = pd, Width = 900, Height = 700 };
+        preview.ShowDialog(this);
     }
 
     private static void FillFilter(ComboBox cmb, int? current, string allText, List<object> items)
@@ -427,6 +553,7 @@ public class MainForm : Form
         }
         ResizeListColumns(_lvEmployees);
         RefreshTeamView();
+        RefreshEmployeeList();
         RefreshVehicleList();
         RefreshSiteList();
         RefreshCalendar();
@@ -458,11 +585,41 @@ public class MainForm : Form
         }
     }
 
+    private void RefreshEmployeeList()
+    {
+        var q = _txtSearchEmp?.Text.Trim().ToLowerInvariant() ?? "";
+        _lvEmployees.Items.Clear();
+        foreach (var e in _employees)
+        {
+            if (q.Length > 0 &&
+                (e.FullName.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0 &&
+                 e.LicenseCategories.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0 &&
+                 e.Email.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0))
+                continue;
+            var item = new ListViewItem(new[]
+            {
+                e.FullName,
+                e.LicenseCategories,
+                e.Email,
+                e.ToString()
+            })
+            { Tag = e };
+            _lvEmployees.Items.Add(item);
+        }
+        ResizeListColumns(_lvEmployees);
+    }
+
     private void RefreshVehicleList()
     {
+        var q = _txtSearchVeh?.Text.Trim().ToLowerInvariant() ?? "";
         _lvVehicles.Items.Clear();
         foreach (var v in _vehicles)
         {
+            if (q.Length > 0 &&
+                (v.VehicleNumber.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0 &&
+                 v.RequiredLicense.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0 &&
+                 v.LicensePlate.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0))
+                continue;
             var item = new ListViewItem(new[]
             {
                 v.VehicleNumber,
@@ -478,9 +635,14 @@ public class MainForm : Form
 
     private void RefreshSiteList()
     {
+        var q = _txtSearchSite?.Text.Trim().ToLowerInvariant() ?? "";
         _lvSites.Items.Clear();
         foreach (var s in _sites.OrderBy(s => s.Name))
         {
+            if (q.Length > 0 &&
+                (s.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0 &&
+                 s.Address.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0))
+                continue;
             var item = new ListViewItem(new[]
             {
                 s.Name,

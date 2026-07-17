@@ -2,7 +2,8 @@ name: "Build & Release"
 
 on:
   push:
-    branches: [master]
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -33,23 +34,13 @@ jobs:
           $v = (Get-Content version.json | ConvertFrom-Json).version
           echo "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: "Create or update tag"
-        shell: pwsh
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          $tag = "v${{ env.VERSION }}"
-          git tag -f $tag HEAD
-          git push origin $tag --force
-
-      - name: "Create or update Release"
+      - name: "Create Release"
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "v${{ env.VERSION }}"
-          gh release delete $tag --yes 2>$null
           gh release create $tag `
             "KOFplanner-Setup.exe" `
             --title $tag `
-            --notes "Siehe Commits für Details."
+            --notes "Siehe Commits fuer Details."

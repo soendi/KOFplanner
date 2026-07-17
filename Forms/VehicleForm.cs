@@ -72,10 +72,22 @@ public class VehicleForm : Form
             DialogResult = DialogResult.None;
             return;
         }
+        var number = _txtNumber.Text.Trim();
+        var plate = _txtPlate.Text.Trim();
+        var dup = _db.GetAllVehicles().FirstOrDefault(v =>
+            v.Id != (_vehicle?.Id ?? 0) &&
+            (string.Equals(v.VehicleNumber, number, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(v.LicensePlate, plate, StringComparison.OrdinalIgnoreCase)));
+        if (dup != null)
+        {
+            MessageBox.Show($"Es existiert bereits ein Fahrzeug mit dieser Nummer oder diesem Kennzeichen:\n[{dup.RequiredLicense}] {dup.VehicleNumber} ({dup.LicensePlate})");
+            DialogResult = DialogResult.None;
+            return;
+        }
         var veh = _vehicle ?? new Vehicle();
         veh.RequiredLicense = _cmbLicense.Text.Trim();
-        veh.VehicleNumber = _txtNumber.Text.Trim();
-        veh.LicensePlate = _txtPlate.Text.Trim();
+        veh.VehicleNumber = number;
+        veh.LicensePlate = plate;
         veh.Seats = seats;
         try { _db.SaveVehicle(veh); }
         catch (Exception ex) { MessageBox.Show("Fahrzeug konnte nicht gespeichert werden:\n" + ex.Message); DialogResult = DialogResult.None; }

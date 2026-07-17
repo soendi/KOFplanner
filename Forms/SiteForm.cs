@@ -70,8 +70,18 @@ public class SiteForm : Form
             DialogResult = DialogResult.None;
             return;
         }
+        var name = _txtName.Text.Trim();
+        var dup = _db.GetAllSites().FirstOrDefault(s =>
+            s.Id != (_site?.Id ?? 0) &&
+            string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (dup != null)
+        {
+            MessageBox.Show($"Es existiert bereits eine Baustelle mit dem Namen \"{dup.Name}\".");
+            DialogResult = DialogResult.None;
+            return;
+        }
         var site = _site ?? new ConstructionSite();
-        site.Name = _txtName.Text.Trim();
+        site.Name = name;
         site.Address = _txtAddress.Text.Trim();
         site.StartDate = _dtpStart.Value;
         site.EndDate = _chkEnd.Checked ? null : _dtpEnd.Value;
