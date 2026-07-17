@@ -436,7 +436,7 @@ public class DatabaseService
         cmd.CommandText = @"
             SELECT a.*, cs.Name, cs.Location, cs.StartDate, cs.EndDate,
                    t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
-                   e.FirstName, e.LastName
+                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes
             FROM Assignments a
             JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
             LEFT JOIN Teams t ON a.TeamId = t.Id
@@ -462,7 +462,9 @@ public class DatabaseService
                     Name = r.GetString(6),
                     Address = r.IsDBNull(7) ? "" : r.GetString(7),
                     StartDate = DateTime.Parse(r.GetString(8)),
-                    EndDate = r.IsDBNull(9) ? null : DateTime.Parse(r.GetString(9))
+                    EndDate = r.IsDBNull(9) ? null : DateTime.Parse(r.GetString(9)),
+                    DistanceKm = r.IsDBNull(16) ? 0 : r.GetDouble(16),
+                    DurationMinutes = r.IsDBNull(17) ? 0 : r.GetInt32(17)
                 }
             };
             if (!r.IsDBNull(10))
@@ -528,7 +530,7 @@ public class DatabaseService
         cmd.CommandText = @"
             SELECT a.*, cs.Name, cs.Location, cs.StartDate, cs.EndDate,
                    t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
-                   e.FirstName, e.LastName
+                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes
             FROM Assignments a
             JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
             LEFT JOIN Teams t ON a.TeamId = t.Id
@@ -550,7 +552,7 @@ public class DatabaseService
                 VehicleId = r.IsDBNull(3) ? null : r.GetInt32(3),
                 EmployeeId = r.IsDBNull(4) ? null : r.GetInt32(4),
                 Date = DateTime.Parse(r.GetString(5)),
-                Site = new ConstructionSite { Id = r.GetInt32(1), Name = r.GetString(6), Address = r.IsDBNull(7) ? "" : r.GetString(7), StartDate = DateTime.Parse(r.GetString(8)), EndDate = r.IsDBNull(9) ? null : DateTime.Parse(r.GetString(9)) }
+                Site = new ConstructionSite { Id = r.GetInt32(1), Name = r.GetString(6), Address = r.IsDBNull(7) ? "" : r.GetString(7), StartDate = DateTime.Parse(r.GetString(8)), EndDate = r.IsDBNull(9) ? null : DateTime.Parse(r.GetString(9)), DistanceKm = r.IsDBNull(16) ? 0 : r.GetDouble(16), DurationMinutes = r.IsDBNull(17) ? 0 : r.GetInt32(17) }
             };
             if (!r.IsDBNull(10))
                 a.Team = new Team { Id = a.TeamId ?? 0, Name = r.GetString(10) };
@@ -640,7 +642,7 @@ public class DatabaseService
         cmd.CommandText = @"
             SELECT a.*, cs.Name, cs.Location, cs.StartDate, cs.EndDate,
                    t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
-                   e.FirstName, e.LastName
+                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes
             FROM Assignments a
             JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
             LEFT JOIN Teams t ON a.TeamId = t.Id
@@ -661,7 +663,7 @@ public class DatabaseService
                 VehicleId = r.IsDBNull(3) ? null : r.GetInt32(3),
                 EmployeeId = r.IsDBNull(4) ? null : r.GetInt32(4),
                 Date = DateTime.Parse(r.GetString(5)),
-                Site = new ConstructionSite { Id = r.GetInt32(1), Name = r.GetString(6), Address = r.IsDBNull(7) ? "" : r.GetString(7), StartDate = DateTime.Parse(r.GetString(8)), EndDate = r.IsDBNull(9) ? null : DateTime.Parse(r.GetString(9)) }
+                Site = new ConstructionSite { Id = r.GetInt32(1), Name = r.GetString(6), Address = r.IsDBNull(7) ? "" : r.GetString(7), StartDate = DateTime.Parse(r.GetString(8)), EndDate = r.IsDBNull(9) ? null : DateTime.Parse(r.GetString(9)), DistanceKm = r.IsDBNull(16) ? 0 : r.GetDouble(16), DurationMinutes = r.IsDBNull(17) ? 0 : r.GetInt32(17) }
             };
             if (!r.IsDBNull(10))
                 a.Team = new Team { Id = a.TeamId ?? 0, Name = r.GetString(10) };
