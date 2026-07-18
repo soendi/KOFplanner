@@ -1579,10 +1579,11 @@ public class MainForm : Form
         var d = GetDateFromPoint(e.Location);
         if (d.HasValue)
         {
-            if (_collisionDays.Contains(d.Value.Date))
+            if (_collisionDays.Contains(d.Value.Date) && (ModifierKeys & Keys.Alt) == 0)
                 ShowCollisionWarning(d.Value.Date);
-            else
+            else if ((ModifierKeys & Keys.Alt) != 0)
                 ShowDayOverview(d.Value.Date);
+            // normaler Doppelklick ohne Alt: keine Aktion (Alt+Hover ist der Zoom)
         }
     }
 
@@ -1612,59 +1613,79 @@ public class MainForm : Form
     // Verschiebt Termin(e) des Starttags auf den (per Shift+Drag gewaehlten)
     // Zieltag. Mehrere Termine am Tag -> Auswahl. Mehrtaetige Bloecke ->
     // "nur ein Tag" oder "mehrere Tage" (vorgane/nachfolgende werden mitgezogen).
+    // Verschiebt Termin(e) des Starttags auf den (per Shift+Drag gewaehlten)
+    // Zieltag. Jeder einzelne Tageseinsatz ist waehlbar (auch identische am
+    // selben Tag erscheinen getrennt). Mehrtaegige Bloecke -> Auswahl
+    // "nur ein Tag" oder "ganze Dauer". Ziel-Duplikate werden abgelehnt.
     private void ShowMovePopup(Point screenPos)
     {
         var from = _dragStartDate!.Value.Date;
         var to = _dragEndDate!.Value.Date;
         var delta = (to - from).Days;
-
-        // Termine des Starttags als Bloecke (Site+Team+Vehicle+Employee zusammengefasst).
         var dayAss = _calAssignments.Where(a => a.Date.Date == from).ToList();
         if (dayAss.Count == 0) return;
-        var blocks = AssignmentBlocks.Build(dayAss);
 
-        // 1) Welcher Termin? Bei mehreren eine Auswahl zeigen.
-        AssignmentBlocks.Block block;
-        if (blocks.Count == 1)
-        {
-            block = blocks[0];
-        }
+        // Einzelne verschiebbare Einheiten: pro (Block-Identitaet, Tag) je eine
+        // Zeile, damit identische Termine am selben Tag getrennt waehlbar sind.
+        var units = dayAss.GroupBy(a => (a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId, a.Date.Date))
+            .Select(g => new MoveUnit
+            {
+                Key = g.Key,
+                First = g.Min(a => a.Date.Date),
+                Last = g.Max(a => a.Date.Date),
+                Rep = g.First(),
+                All = g.ToList()
+            }).ToList();
+
+        // 1) Welche(r) Einsatz/Tag? Bei mehreren eine Auswahl zeigen (einzeln).
+        List<MoveUnit> chosen;
+        if (units.Count == 1) chosen = units;
         else
         {
-            var chosen = ChooseBlock(blocks, screenPos);
-            if (chosen == null) return;
-            block = chosen;
+            chosen = ChooseUnits(units, screenPos);
+            if (chosen == null || chosen.Count == 0) return;
         }
 
-        // 2) Mehrtaetig? Frage: nur ein Tag oder ganze Blocklaenge.
-        bool moveWholeBlock = true;
-        if (block.Days > 1)
+        // 2) Mehrtaetig? Frage je Einheit: nur ein Tag oder ganze Blocklaenge.
+        var toMove = new List<Assignment>();
+        foreach (var u in chosen)
         {
-            var res = MessageBox.Show(
-                $"Termin ist {block.Days} Tage lang ({block.First:dd.MM.} – {block.Last:dd.MM.}).\n\n" +
-                "Ja = ganze Einsatzdauer verschieben (vorgängige und nachfolgende Tage werden mitgezogen)\n" +
-                "Nein = nur der Tag {from:dd.MM.yyyy} verschieben",
-                "Mehrtägiger Termin", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-            if (res == DialogResult.Cancel) return;
-            moveWholeBlock = res == DialogResult.Yes;
+            bool whole = true;
+            var days = (u.Last - u.First).Days + 1;
+            if (days > 1)
+            {
+                var res = MessageBox.Show(
+                    $"Termin ist {days} Tage lang ({u.First:dd.MM.} – {u.Last:dd.MM.}).\n\n" +
+                    "Ja = ganze Einsatzdauer verschieben (vorgängige und nachfolgende Tage werden mitgezogen)\n" +
+                    "Nein = nur der Tag {from:dd.MM.yyyy} verschieben",
+                    "Mehrtägiger Termin", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                if (res == DialogResult.Cancel) return;
+                whole = res == DialogResult.Yes;
+            }
+            if (whole)
+                toMove.AddRange(dayAss.Where(a => a.Date.Date >= u.First && a.Date.Date <= u.Last
+                    && a.ConstructionSiteId == u.Key.Site && a.TeamId == u.Key.Team
+                    && a.VehicleId == u.Key.Vehicle && a.EmployeeId == u.Key.Employee).ToList());
+            else
+                toMove.AddRange(dayAss.Where(a => a.Date.Date == from
+                    && a.ConstructionSiteId == u.Key.Site && a.TeamId == u.Key.Team
+                    && a.VehicleId == u.Key.Vehicle && a.EmployeeId == u.Key.Employee).ToList());
         }
-
-        // Assignments auswaehlen, die verschoben werden.
-        List<Assignment> toMove;
-        if (moveWholeBlock)
-            toMove = dayAss.Where(a => a.Date.Date >= block.First && a.Date.Date <= block.Last
-                && a.ConstructionSiteId == block.Rep.ConstructionSiteId
-                && a.TeamId == block.Rep.TeamId
-                && a.VehicleId == block.Rep.VehicleId
-                && a.EmployeeId == block.Rep.EmployeeId).ToList();
-        else
-            toMove = dayAss.Where(a => a.Date.Date == from
-                && a.ConstructionSiteId == block.Rep.ConstructionSiteId
-                && a.TeamId == block.Rep.TeamId
-                && a.VehicleId == block.Rep.VehicleId
-                && a.EmployeeId == block.Rep.EmployeeId).ToList();
-
         if (toMove.Count == 0) return;
+
+        // 3) Duplikat-Pruefung am Ziel: gleicher Termin darf am Zieltag nicht schon existieren.
+        var clash = toMove.FirstOrDefault(a =>
+            _calAssignments.Any(x => x.Id != a.Id && x.Date.Date == to
+                && x.ConstructionSiteId == a.ConstructionSiteId && x.TeamId == a.TeamId
+                && x.VehicleId == a.VehicleId && x.EmployeeId == a.EmployeeId));
+        if (clash != null)
+        {
+            var name = clash.Site?.Name ?? "Termin";
+            MessageBox.Show($"Am {to:dd.MM.yyyy} existiert dieser Termin ({name}) bereits. Verschieben abgebrochen, um eine Kollision zu vermeiden.",
+                "Kollision am Zieltag", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         if (MessageBox.Show($"{toMove.Count} Einsatz/Tag(e) von {from:dd.MM.yyyy} nach {to:dd.MM.yyyy} verschieben?",
             "Verschieben", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
@@ -1677,33 +1698,50 @@ public class MainForm : Form
         RefreshAllData();
     }
 
-    // Laesst den Benutzer den zu verschiebenden Termin aus mehreren am Tag waehlen.
-    private AssignmentBlocks.Block? ChooseBlock(List<AssignmentBlocks.Block> blocks, Point screenPos)
+    private sealed class MoveUnit
     {
-        if (blocks.Count == 0) return null;
+        public (int Site, int? Team, int? Vehicle, int? Employee, DateTime Day) Key;
+        public DateTime First;
+        public DateTime Last;
+        public Assignment Rep = null!;
+        public List<Assignment> All = new();
+        public string Label
+        {
+            get
+            {
+                var site = Rep.Site?.Name ?? "Einsatz";
+                var team = Rep.Team?.Name;
+                var s = team != null ? $"{site} / {team}" : site;
+                var days = (Last - First).Days + 1;
+                if (days > 1) s += $" ({First:dd.MM.}–{Last:dd.MM.})";
+                return s;
+            }
+        }
+    }
+
+    // Laesst den Benutzer den/die zu verschiebenden Einsatz/Termin aus mehreren
+    // waehlen. Identische Termine am selben Tag erscheinen getrennt (je eine Zeile).
+    private List<MoveUnit>? ChooseUnits(List<MoveUnit> units, Point screenPos)
+    {
+        if (units.Count == 0) return null;
         using var dlg = new Form();
         dlg.Text = "Welcher Termin?";
-        dlg.Size = new Size(420, 80 + blocks.Count * 38);
+        dlg.Size = new Size(440, 90 + units.Count * 36);
         dlg.StartPosition = FormStartPosition.Manual;
-        dlg.Location = new Point(Math.Max(0, screenPos.X - 210), Math.Max(0, screenPos.Y - 100));
+        dlg.Location = new Point(Math.Max(0, screenPos.X - 220), Math.Max(0, screenPos.Y - 120));
         dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
         dlg.MaximizeBox = false;
         dlg.MinimizeBox = false;
         var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(10), AutoScroll = true };
-        AssignmentBlocks.Block? chosen = null;
-        foreach (var b in blocks)
+        var selected = new List<MoveUnit>();
+        foreach (var u in units)
         {
-            var site = b.Rep.Site?.Name ?? "Einsatz";
-            var team = b.Rep.Team?.Name;
-            var label = team != null ? $"{site} / {team}" : site;
-            if (b.Days > 1) label += $" ({b.First:dd.MM.}–{b.Last:dd.MM.})";
-            var btn = new Button { Text = label, Width = 380, Height = 32, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlatStyle = FlatStyle.Flat };
-            btn.Click += (_, _) => { chosen = b; dlg.DialogResult = DialogResult.OK; };
+            var btn = new Button { Text = u.Label, Width = 400, Height = 30, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlatStyle = FlatStyle.Flat };
+            btn.Click += (_, _) => { selected.Add(u); dlg.DialogResult = DialogResult.OK; };
             flp.Controls.Add(btn);
         }
         dlg.Controls.Add(flp);
-        dlg.AcceptButton = null;
-        return dlg.ShowDialog(this) == DialogResult.OK ? chosen : null;
+        return dlg.ShowDialog(this) == DialogResult.OK ? selected : null;
     }
 
     private ContextMenuStrip BuildCalendarContextMenu()
