@@ -18,30 +18,61 @@ public static class IcsExport
         AppendLine(sb, "CALSCALE:GREGORIAN");
         AppendLine(sb, "METHOD:PUBLISH");
 
-        foreach (var a in assignments)
-        {
-            if (a.Date.Date < from.Date || a.Date.Date > until.Date) continue;
-            var siteName = a.Site?.Name ?? "Einsatz";
-            var loc = a.Site?.Address ?? "";
-            var desc = new List<string>();
-            if (a.Team != null) desc.Add("Team: " + a.Team.Name);
-            if (a.Vehicle != null) desc.Add("Fahrzeug: " + a.Vehicle.VehicleNumber);
-            if (a.Employee != null) desc.Add("Mitarbeiter: " + a.Employee.FullName);
+        // Mehrtaegige Einsaetze liegen als eine Zeile pro Tag vor.
+        // Gleich: Baustelle + Team + Fahrzeug + Mitarbeiter.
+        // Lueckenlos aufeinanderfolgende Tage werden zu EINEM Termin
+        // (erster Tag bis einschliesslich letzter Tag) zusammengefasst.
+        var inRange = assignments
+            .Where(a => a.Date.Date >= from.Date && a.Date.Date <= until.Date)
+            .OrderBy(a => a.Date.Date)
+            .ToList();
 
-            var uid = $"kofplanner-{a.Id}-{a.Date:yyyyMMdd}";
-            AppendLine(sb, "BEGIN:VEVENT");
-            AppendLine(sb, "UID:" + uid);
-            AppendLine(sb, "DTSTAMP:" + ToIcs(DateTime.Now));
-            AppendLine(sb, "DTSTART;VALUE=DATE:" + a.Date.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
-            AppendLine(sb, "DTEND;VALUE=DATE:" + a.Date.AddDays(1).ToString("yyyyMMdd", CultureInfo.InvariantCulture));
-            AppendLine(sb, "SUMMARY:" + Fold(Escape(siteName)));
-            if (loc.Length > 0) AppendLine(sb, "LOCATION:" + Fold(Escape(loc)));
-            if (desc.Count > 0) AppendLine(sb, "DESCRIPTION:" + Fold(Escape(string.Join(" | ", desc))));
-            AppendLine(sb, "END:VEVENT");
+        var groups = inRange
+            .GroupBy(a => (a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId));
+
+        foreach (var g in groups)
+        {
+            var days = g.Select(a => a.Date.Date).Distinct().OrderBy(d => d).ToList();
+            int i = 0;
+            while (i < days.Count)
+            {
+                int start = i;
+                while (i + 1 < days.Count && days[i + 1] == days[i].AddDays(1)) i++;
+                var first = days[start];
+                var last = days[i];
+
+                // Repraesentanten fuer Texte (Site/Team/... aus erstem Treffer)
+                var rep = g.First(a => a.Date.Date == first);
+                WriteEvent(sb, rep, first, last);
+                i++;
+            }
         }
 
         AppendLine(sb, "END:VCALENDAR");
         return sb.ToString();
+    }
+
+    private static void WriteEvent(StringBuilder sb, Assignment a, DateTime first, DateTime last)
+    {
+        var siteName = a.Site?.Name ?? "Einsatz";
+        var loc = a.Site?.Address ?? "";
+        var desc = new List<string>();
+        if (a.Team != null) desc.Add("Team: " + a.Team.Name);
+        if (a.Vehicle != null) desc.Add("Fahrzeug: " + a.Vehicle.VehicleNumber);
+        if (a.Employee != null) desc.Add("Mitarbeiter: " + a.Employee.FullName);
+
+        // DTEND bei Ganztagsterminen = Tag NACH dem letzten Tag.
+        var dtEnd = last.AddDays(1);
+
+        AppendLine(sb, "BEGIN:VEVENT");
+        AppendLine(sb, "UID:" + $"kofplanner-{a.Id}-{first:yyyyMMdd}");
+        AppendLine(sb, "DTSTAMP:" + ToIcs(DateTime.Now));
+        AppendLine(sb, "DTSTART;VALUE=DATE:" + first.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
+        AppendLine(sb, "DTEND;VALUE=DATE:" + dtEnd.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
+        AppendLine(sb, "SUMMARY:" + Fold(Escape(siteName)));
+        if (loc.Length > 0) AppendLine(sb, "LOCATION:" + Fold(Escape(loc)));
+        if (desc.Count > 0) AppendLine(sb, "DESCRIPTION:" + Fold(Escape(string.Join(" | ", desc))));
+        AppendLine(sb, "END:VEVENT");
     }
 
     // Jede Zeile mit CRLF beenden (Google/L Outlook strikt).
