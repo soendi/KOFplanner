@@ -79,6 +79,7 @@ public class MainForm : Form
     private DateTime? _dragStartDate, _dragEndDate, _dragCurrentDate;
     private bool _isDragging;
     private bool _dragIsAssignment;
+    private bool _dragIsMove;
     private bool _suppressClick;
     private Point _dragStartPoint;
     private Team? _selectedTeam;
@@ -1007,8 +1008,8 @@ public class MainForm : Form
             }
         }
 
-        // Shift+hover zoom overlay
-        if (_hoverDate.HasValue && (ModifierKeys & Keys.Shift) != 0)
+        // Alt+hover zoom overlay (Shift is reserved for drag-move)
+        if (_hoverDate.HasValue && (ModifierKeys & Keys.Alt) != 0)
         {
             var (zx, zy) = GetCellPosition(_hoverDate.Value);
             if (zx >= 0)
@@ -1127,12 +1128,19 @@ public class MainForm : Form
 
         using var sf = new Font(Font.FontFamily, zoomed ? 9 : 7);
         int ly = y + (zoomed ? 22 : 16);
+        // Verfuegbarer Platz fuer die Detailzeilen; bei vielen Einsaetzen
+        // pro Tag werden die Zeilen automatisch duenner, damit KEINE
+        // Zeile eine andere ueberlappt (jede bleibt einzeln sichtbar).
+        var topStart = ly;
+        var bottom = y + ch - 2;
+        var avail = bottom - topStart;
         var lineH = zoomed ? 18 : 14;
-        var maxY = y + ch - 4;
+        if (lines.Count > 0 && lines.Count * (lineH + 1) > avail)
+            lineH = Math.Max(8, (avail - (lines.Count - 1)) / lines.Count);
         var maxChars = zoomed ? 80 : Math.Max(8, cw / 6);
-        foreach (var (label, lf, lb, lt) in lines)
+        for (int li = 0; li < lines.Count; li++)
         {
-            if (ly > maxY) break;
+            var (label, lf, lb, lt) = lines[li];
             var lx = x + 2;
             var lw = cw - 4;
             using var fb = new SolidBrush(lf);
@@ -1141,7 +1149,7 @@ public class MainForm : Form
             g.DrawRectangle(bp, lx, ly, lw, lineH);
             var detail = FitText(g, sf, label, lw - 4, maxChars);
             using var tb = new SolidBrush(lt);
-            g.DrawString(detail, sf, tb, lx + 2, ly + (zoomed ? 3 : 1));
+            g.DrawString(detail, sf, tb, lx + 2, ly + Math.Max(0, (lineH - 8) / 2));
             ly += lineH + 1;
         }
     }
@@ -1474,6 +1482,7 @@ public class MainForm : Form
                 _isDragging = true;
                 _suppressClick = false;
                 _dragIsAssignment = (ModifierKeys & Keys.Control) != 0;
+                _dragIsMove = (ModifierKeys & Keys.Shift) != 0;
                 _dragStartDate = _dragEndDate = _dragCurrentDate = d;
                 _dragStartPoint = e.Location;
                 _calendarPanel.Invalidate();
@@ -1499,7 +1508,8 @@ public class MainForm : Form
         else
         {
             _calendarPanel.Cursor = GetDateFromPoint(e.Location).HasValue ? Cursors.Hand : Cursors.Default;
-            if ((ModifierKeys & Keys.Shift) != 0)
+            // Tages-Zoom jetzt mit ALT+Hover (Shift ist fuer Drag-Verschieben reserviert).
+            if ((ModifierKeys & Keys.Alt) != 0)
             {
                 var d = GetDateFromPoint(e.Location);
                 if (d != _hoverDate)
@@ -1529,11 +1539,10 @@ public class MainForm : Form
                 _suppressClick = true;
                 ShowDateRangePopup(_calendarPanel.PointToScreen(e.Location));
             }
-            else if (!_dragIsAssignment && _dragStartDate.HasValue && _dragEndDate.HasValue
-                     && _dragStartDate.Value.Date != _dragEndDate.Value.Date
-                     && _calAssignments.Any(a => a.Date.Date == _dragStartDate.Value.Date))
+            else if (_dragIsMove && _dragStartDate.HasValue && _dragEndDate.HasValue
+                     && _dragStartDate.Value.Date != _dragEndDate.Value.Date)
             {
-                // Einsatz per Drag auf anderen Tag verschieben (ohne Umschalt/Strg).
+                // Termin(e) per Shift+Drag auf anderen Tag verschieben.
                 _suppressClick = true;
                 ShowMovePopup(_calendarPanel.PointToScreen(e.Location));
             }
@@ -1600,41 +1609,101 @@ public class MainForm : Form
         MessageBox.Show(msg.ToString(), "Kollisionswarnung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
-    // Verschiebt alle Einsaetze des Starttags auf den (per Drag gewaehlten)
-    // Zieltag. Mehrtaegige Bloecke werden um die gleiche Tagesdifferenz
-    // verschoben.
+    // Verschiebt Termin(e) des Starttags auf den (per Shift+Drag gewaehlten)
+    // Zieltag. Mehrere Termine am Tag -> Auswahl. Mehrtaetige Bloecke ->
+    // "nur ein Tag" oder "mehrere Tage" (vorgane/nachfolgende werden mitgezogen).
     private void ShowMovePopup(Point screenPos)
     {
         var from = _dragStartDate!.Value.Date;
         var to = _dragEndDate!.Value.Date;
-        var moved = _calAssignments.Where(a => a.Date.Date == from).ToList();
-        if (moved.Count == 0) return;
         var delta = (to - from).Days;
 
-        using var popup = new Form();
-        popup.Text = $"Einsätze verschieben: {from:dd.MM.yyyy} → {to:dd.MM.yyyy}";
-        popup.Size = new Size(360, 160);
-        popup.StartPosition = FormStartPosition.Manual;
-        popup.Location = new Point(Math.Max(0, screenPos.X - 180), Math.Max(0, screenPos.Y - 80));
-        popup.FormBorderStyle = FormBorderStyle.FixedDialog;
-        popup.MaximizeBox = false;
-        popup.MinimizeBox = false;
-        var lbl = new Label { Text = $"{moved.Count} Einsatz/Einsätze von {from:dd.MM.yyyy} nach {to:dd.MM.yyyy} verschieben?", Dock = DockStyle.Top, Padding = new Padding(10), AutoSize = true };
-        var flp = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(10) };
-        var btnOk = new Button { Text = "Verschieben", Width = 120, Height = 30, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Abbrechen", Width = 120, Height = 30, DialogResult = DialogResult.Cancel };
-        flp.Controls.AddRange(new Control[] { btnCancel, btnOk });
-        popup.Controls.Add(lbl); popup.Controls.Add(flp);
-        popup.CancelButton = btnCancel;
-        if (popup.ShowDialog(this) == DialogResult.OK)
+        // Termine des Starttags als Bloecke (Site+Team+Vehicle+Employee zusammengefasst).
+        var dayAss = _calAssignments.Where(a => a.Date.Date == from).ToList();
+        if (dayAss.Count == 0) return;
+        var blocks = AssignmentBlocks.Build(dayAss);
+
+        // 1) Welcher Termin? Bei mehreren eine Auswahl zeigen.
+        AssignmentBlocks.Block block;
+        if (blocks.Count == 1)
         {
-            foreach (var a in moved)
-            {
-                a.Date = a.Date.AddDays(delta);
-                _db.SaveAssignment(a);
-            }
-            RefreshAllData();
+            block = blocks[0];
         }
+        else
+        {
+            var chosen = ChooseBlock(blocks, screenPos);
+            if (chosen == null) return;
+            block = chosen;
+        }
+
+        // 2) Mehrtaetig? Frage: nur ein Tag oder ganze Blocklaenge.
+        bool moveWholeBlock = true;
+        if (block.Days > 1)
+        {
+            var res = MessageBox.Show(
+                $"Termin ist {block.Days} Tage lang ({block.First:dd.MM.} – {block.Last:dd.MM.}).\n\n" +
+                "Ja = ganze Einsatzdauer verschieben (vorgängige und nachfolgende Tage werden mitgezogen)\n" +
+                "Nein = nur der Tag {from:dd.MM.yyyy} verschieben",
+                "Mehrtägiger Termin", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (res == DialogResult.Cancel) return;
+            moveWholeBlock = res == DialogResult.Yes;
+        }
+
+        // Assignments auswaehlen, die verschoben werden.
+        List<Assignment> toMove;
+        if (moveWholeBlock)
+            toMove = dayAss.Where(a => a.Date.Date >= block.First && a.Date.Date <= block.Last
+                && a.ConstructionSiteId == block.Rep.ConstructionSiteId
+                && a.TeamId == block.Rep.TeamId
+                && a.VehicleId == block.Rep.VehicleId
+                && a.EmployeeId == block.Rep.EmployeeId).ToList();
+        else
+            toMove = dayAss.Where(a => a.Date.Date == from
+                && a.ConstructionSiteId == block.Rep.ConstructionSiteId
+                && a.TeamId == block.Rep.TeamId
+                && a.VehicleId == block.Rep.VehicleId
+                && a.EmployeeId == block.Rep.EmployeeId).ToList();
+
+        if (toMove.Count == 0) return;
+        if (MessageBox.Show($"{toMove.Count} Einsatz/Tag(e) von {from:dd.MM.yyyy} nach {to:dd.MM.yyyy} verschieben?",
+            "Verschieben", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        foreach (var a in toMove)
+        {
+            a.Date = a.Date.AddDays(delta);
+            _db.SaveAssignment(a);
+        }
+        RefreshAllData();
+    }
+
+    // Laesst den Benutzer den zu verschiebenden Termin aus mehreren am Tag waehlen.
+    private AssignmentBlocks.Block? ChooseBlock(List<AssignmentBlocks.Block> blocks, Point screenPos)
+    {
+        if (blocks.Count == 0) return null;
+        using var dlg = new Form();
+        dlg.Text = "Welcher Termin?";
+        dlg.Size = new Size(420, 80 + blocks.Count * 38);
+        dlg.StartPosition = FormStartPosition.Manual;
+        dlg.Location = new Point(Math.Max(0, screenPos.X - 210), Math.Max(0, screenPos.Y - 100));
+        dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
+        dlg.MaximizeBox = false;
+        dlg.MinimizeBox = false;
+        var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(10), AutoScroll = true };
+        AssignmentBlocks.Block? chosen = null;
+        foreach (var b in blocks)
+        {
+            var site = b.Rep.Site?.Name ?? "Einsatz";
+            var team = b.Rep.Team?.Name;
+            var label = team != null ? $"{site} / {team}" : site;
+            if (b.Days > 1) label += $" ({b.First:dd.MM.}–{b.Last:dd.MM.})";
+            var btn = new Button { Text = label, Width = 380, Height = 32, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlatStyle = FlatStyle.Flat };
+            btn.Click += (_, _) => { chosen = b; dlg.DialogResult = DialogResult.OK; };
+            flp.Controls.Add(btn);
+        }
+        dlg.Controls.Add(flp);
+        dlg.AcceptButton = null;
+        return dlg.ShowDialog(this) == DialogResult.OK ? chosen : null;
     }
 
     private ContextMenuStrip BuildCalendarContextMenu()
