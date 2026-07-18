@@ -111,15 +111,27 @@ public class MainForm : Form
         dateiMenu.DropDownItems.Add("Datenbank wiederherstellen...", null, (_, _) => RestoreDatabase());
         dateiMenu.DropDownItems.Add("Google Drive Backup...", null, (_, _) => ConfigureBackup());
         dateiMenu.DropDownItems.Add(new ToolStripSeparator());
-        dateiMenu.DropDownItems.Add("Wiederkehrende Einsätze...", null, (_, _) => OpenRecurring());
-        dateiMenu.DropDownItems.Add("Statistik / Auslastung...", null, (_, _) => OpenStatistics());
-        dateiMenu.DropDownItems.Add("Export...", null, (_, _) => DoExport());
-        dateiMenu.DropDownItems.Add("Einsätze als iCal exportieren...", null, (_, _) => DoExportIcs());
-        dateiMenu.DropDownItems.Add("Import...", null, (_, _) => DoImport());
-        dateiMenu.DropDownItems.Add(new ToolStripSeparator());
         dateiMenu.DropDownItems.Add("Einstellungen...", null, (_, _) => OpenSettings());
         dateiMenu.DropDownItems.Add(new ToolStripSeparator());
         dateiMenu.DropDownItems.Add("Beenden", null, (_, _) => Close());
+
+        var kalenderMenu = menu.Items.Add("&Kalender") as ToolStripMenuItem;
+        kalenderMenu!.DropDownItems.Add("Wiederkehrende Einsätze...", null, (_, _) => OpenRecurring());
+        kalenderMenu.DropDownItems.Add("Einsätze als iCal exportieren...", null, (_, _) => DoExportIcs());
+        kalenderMenu.DropDownItems.Add("Kalender drucken...", null, (_, _) => PrintCalendar());
+
+        var maMenu = menu.Items.Add("&Mitarbeiter") as ToolStripMenuItem;
+        maMenu!.DropDownItems.Add("Mitarbeiter neu...", null, (_, _) => EditEmployee(null));
+        maMenu.DropDownItems.Add("Team neu...", null, (_, _) => EditTeam(null));
+        maMenu.DropDownItems.Add(new ToolStripSeparator());
+        maMenu.DropDownItems.Add("Statistik / Auslastung...", null, (_, _) => OpenStatistics());
+
+        var fzMenu = menu.Items.Add("&Fahrzeuge") as ToolStripMenuItem;
+        fzMenu!.DropDownItems.Add("Fahrzeug neu...", null, (_, _) => EditVehicle(null));
+        fzMenu.DropDownItems.Add(new ToolStripSeparator());
+        fzMenu.DropDownItems.Add("Export...", null, (_, _) => DoExport());
+        fzMenu.DropDownItems.Add("Import...", null, (_, _) => DoImport());
+
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
         hilfeMenu!.DropDownItems.Add("Hilfe öffnen...", null, (_, _) => OpenHelp());
         hilfeMenu.DropDownItems.Add("Nach Updates suchen...", null, async (_, _) => await CheckUpdate());

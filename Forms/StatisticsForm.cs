@@ -44,7 +44,7 @@ public class StatisticsForm : Form
         var tabT = new TabPage("Teams");
 
         _lvVehicle = new ListView { Dock = DockStyle.Fill, View = View.Details, GridLines = true, FullRowSelect = true };
-        _lvVehicle.Columns.Add("Fahrzeug", 140); _lvVehicle.Columns.Add("Einsätze", 90); _lvVehicle.Columns.Add("Km gesamt", 110); _lvVehicle.Columns.Add("Fahrtzeit (h)", 110);
+        _lvVehicle.Columns.Add("Fahrzeug", 140); _lvVehicle.Columns.Add("Einsätze", 90); _lvVehicle.Columns.Add("Tage", 70); _lvVehicle.Columns.Add("Km gesamt", 110); _lvVehicle.Columns.Add("Fahrtzeit (h)", 110);
         tabV.Controls.Add(_lvVehicle);
 
         _lvTeam = new ListView { Dock = DockStyle.Fill, View = View.Details, GridLines = true, FullRowSelect = true };
@@ -68,10 +68,12 @@ public class StatisticsForm : Form
         _lvVehicle.Items.Clear();
         foreach (var g in assignments.Where(a => a.VehicleId.HasValue).GroupBy(a => a.VehicleId!.Value))
         {
+            var blocks = AssignmentBlocks.Build(g.ToList());
             var km = g.Sum(a => a.Site?.DistanceKm ?? 0);
             var min = g.Sum(a => a.Site?.DurationMinutes ?? 0);
             var item = new ListViewItem(veh.TryGetValue(g.Key, out var n) ? n : "?");
-            item.SubItems.Add(g.Count().ToString());
+            item.SubItems.Add(blocks.Count.ToString());
+            item.SubItems.Add(blocks.Sum(b => b.Days).ToString());
             item.SubItems.Add(km.ToString("F1"));
             item.SubItems.Add((min / 60.0).ToString("F1"));
             _lvVehicle.Items.Add(item);
@@ -80,9 +82,10 @@ public class StatisticsForm : Form
         _lvTeam.Items.Clear();
         foreach (var g in assignments.Where(a => a.TeamId.HasValue).GroupBy(a => a.TeamId!.Value))
         {
-            var personTage = g.Count() + g.Count(a => a.EmployeeId.HasValue);
+            var blocks = AssignmentBlocks.Build(g.ToList());
+            var personTage = blocks.Sum(b => b.Days) + g.Count(a => a.EmployeeId.HasValue);
             var item = new ListViewItem(teams.TryGetValue(g.Key, out var n) ? n : "?");
-            item.SubItems.Add(g.Count().ToString());
+            item.SubItems.Add(blocks.Count.ToString());
             item.SubItems.Add(personTage.ToString());
             _lvTeam.Items.Add(item);
         }

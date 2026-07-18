@@ -18,34 +18,15 @@ public static class IcsExport
         AppendLine(sb, "CALSCALE:GREGORIAN");
         AppendLine(sb, "METHOD:PUBLISH");
 
-        // Mehrtaegige Einsaetze liegen als eine Zeile pro Tag vor.
-        // Gleich: Baustelle + Team + Fahrzeug + Mitarbeiter.
-        // Lueckenlos aufeinanderfolgende Tage werden zu EINEM Termin
-        // (erster Tag bis einschliesslich letzter Tag) zusammengefasst.
+        // Mehrtaegige Einsaetze liegen als eine Zeile pro Tag vor und
+        // werden zu zusammenhaengenden Bloecken zusammengefasst.
         var inRange = assignments
             .Where(a => a.Date.Date >= from.Date && a.Date.Date <= until.Date)
-            .OrderBy(a => a.Date.Date)
             .ToList();
 
-        var groups = inRange
-            .GroupBy(a => (a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId));
-
-        foreach (var g in groups)
+        foreach (var b in AssignmentBlocks.Build(inRange))
         {
-            var days = g.Select(a => a.Date.Date).Distinct().OrderBy(d => d).ToList();
-            int i = 0;
-            while (i < days.Count)
-            {
-                int start = i;
-                while (i + 1 < days.Count && days[i + 1] == days[i].AddDays(1)) i++;
-                var first = days[start];
-                var last = days[i];
-
-                // Repraesentanten fuer Texte (Site/Team/... aus erstem Treffer)
-                var rep = g.First(a => a.Date.Date == first);
-                WriteEvent(sb, rep, first, last);
-                i++;
-            }
+            WriteEvent(sb, b.Rep, b.First, b.Last);
         }
 
         AppendLine(sb, "END:VCALENDAR");
