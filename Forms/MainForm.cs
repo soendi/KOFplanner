@@ -3,6 +3,7 @@ using KOFplanner.Services;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Printing;
+using System.Text;
 
 namespace KOFplanner.Forms;
 
@@ -30,6 +31,8 @@ public class MainForm : Form
     private readonly HashSet<string> _multiDayKeys = new();
     private readonly HashSet<int> _spanAssignmentIds = new();
     private readonly HashSet<DateTime> _selectedDates = new();
+    // Tage mit doppelter MA- oder Fahrzeugbelegung (Kollision).
+    private readonly HashSet<DateTime> _collisionDays = new();
 
     private sealed class CalendarSpan
     {
@@ -51,6 +54,7 @@ public class MainForm : Form
     private TextBox _txtSearchEmp = null!;
     private TextBox _txtSearchVeh = null!;
     private TextBox _txtSearchSite = null!;
+    private TextBox _txtCalendarSearch = null!;
 
     // Sites whose "delete expired?" question was already shown this session (avoid nagging
     // on every refresh once the user answered).
@@ -118,19 +122,20 @@ public class MainForm : Form
         var kalenderMenu = menu.Items.Add("&Kalender") as ToolStripMenuItem;
         kalenderMenu!.DropDownItems.Add("Wiederkehrende Einsätze...", null, (_, _) => OpenRecurring());
         kalenderMenu.DropDownItems.Add("Einsätze als iCal exportieren...", null, (_, _) => DoExportIcs());
+        kalenderMenu.DropDownItems.Add("Export...", null, (_, _) => DoExport());
+        kalenderMenu.DropDownItems.Add("Import...", null, (_, _) => DoImport());
+        kalenderMenu.DropDownItems.Add("Mitarbeiter informieren...", null, (_, _) => OpenInform());
         kalenderMenu.DropDownItems.Add("Kalender drucken...", null, (_, _) => PrintCalendar());
 
         var maMenu = menu.Items.Add("&Mitarbeiter") as ToolStripMenuItem;
         maMenu!.DropDownItems.Add("Mitarbeiter neu...", null, (_, _) => EditEmployee(null));
         maMenu.DropDownItems.Add("Team neu...", null, (_, _) => EditTeam(null));
-        maMenu.DropDownItems.Add(new ToolStripSeparator());
-        maMenu.DropDownItems.Add("Statistik / Auslastung...", null, (_, _) => OpenStatistics());
 
         var fzMenu = menu.Items.Add("&Fahrzeuge") as ToolStripMenuItem;
         fzMenu!.DropDownItems.Add("Fahrzeug neu...", null, (_, _) => EditVehicle(null));
         fzMenu.DropDownItems.Add(new ToolStripSeparator());
-        fzMenu.DropDownItems.Add("Export...", null, (_, _) => DoExport());
-        fzMenu.DropDownItems.Add("Import...", null, (_, _) => DoImport());
+        fzMenu.DropDownItems.Add("Statistik / Auslastung...", null, (_, _) => OpenStatistics());
+        fzMenu.DropDownItems.Add("Leerlauf-Report...", null, (_, _) => OpenIdleReport());
 
         var hilfeMenu = menu.Items.Add("&Hilfe") as ToolStripMenuItem;
         hilfeMenu!.DropDownItems.Add("Hilfe öffnen...", null, (_, _) => OpenHelp());
@@ -220,7 +225,13 @@ public class MainForm : Form
         var btnPrintCal = new Button { Text = "Kalender drucken", Location = new Point(1138, 8), Width = 120, Height = 23, FlatStyle = FlatStyle.Flat, Font = new Font(Font.FontFamily, 9) };
         btnPrintCal.Click += (_, _) => PrintCalendar();
         StyleButton(btnPrintCal);
-        nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, btnView, _lblMonthYear, lblFilter, _cmbEmployeeFilter, _cmbSiteFilter, _cmbTeamFilter, btnResetFilter, btnPrintCal });
+        var btnSearch = new Button { Text = "Suchen", Location = new Point(1263, 8), Width = 80, Height = 23, FlatStyle = FlatStyle.Flat, Font = new Font(Font.FontFamily, 9) };
+        btnSearch.Click += (_, _) => CalendarSearch();
+        StyleButton(btnSearch);
+        _txtCalendarSearch = new TextBox { Location = new Point(1350, 8), Width = 150, Font = new Font(Font.FontFamily, 9) };
+        _txtCalendarSearch.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; CalendarSearch(); } };
+        var lblSearch = new Label { Text = "Suche (Datum/Baustelle):", Location = new Point(1150, 11), AutoSize = true, Font = new Font(Font.FontFamily, 9) };
+        nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, btnView, _lblMonthYear, lblFilter, _cmbEmployeeFilter, _cmbSiteFilter, _cmbTeamFilter, btnResetFilter, btnPrintCal, lblSearch, _txtCalendarSearch, btnSearch });
         tabKalender.Controls.Add(_calendarPanel);
         tabKalender.Controls.Add(nav);
         _tabControl.TabPages.Add(tabKalender);
@@ -435,6 +446,95 @@ public class MainForm : Form
     {
         using var f = new StatisticsForm(_db);
         f.ShowDialog(this);
+    }
+
+    private void CalendarSearch()
+    {
+        var q = _txtCalendarSearch.Text.Trim();
+        if (q.Length == 0) return;
+
+        // Datum parsen (z.B. 15.07. oder 15.07.2025)?
+        if (DateTime.TryParse(q, out var parsed))
+        {
+            _currentMonth = new DateTime(parsed.Year, parsed.Month, 1);
+            if (_weekView) _weekStart = MondayOf(parsed);
+            _filterSiteId = null;
+            _cmbSiteFilter.SelectedIndex = 0;
+            RefreshCalendar();
+            return;
+        }
+
+        // Sonst: Baustelle anhand des Namens suchen und Filter setzen.
+        var site = _db.GetAllSites().FirstOrDefault(s =>
+            s.Name.Contains(q, StringComparison.CurrentCultureIgnoreCase));
+        if (site != null)
+        {
+            _filterSiteId = site.Id;
+            for (int i = 0; i < _cmbSiteFilter.Items.Count; i++)
+                if (_cmbSiteFilter.Items[i] is ConstructionSite cs && cs.Id == site.Id) { _cmbSiteFilter.SelectedIndex = i; break; }
+            RefreshCalendar();
+        }
+        else
+        {
+            MessageBox.Show($"Keine Baustelle mit „{q}“ gefunden.", "Suche", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
+    private void OpenIdleReport()
+    {
+        using var f = new IdleReportForm(_db);
+        f.ShowDialog(this);
+    }
+
+    private void OpenInform()
+    {
+        using var f = new InformEmployeesForm(_db, _settings);
+        using var host = new Form { Text = "Mitarbeiter informieren", Size = new Size(820, 620), StartPosition = FormStartPosition.CenterParent, Icon = Icon };
+        f.Dock = DockStyle.Fill;
+        host.Controls.Add(f);
+        host.ShowDialog(this);
+    }
+
+    // Verschickt direkt aus dem Kalender heraus eine E-Mail an alle
+    // Mitarbeiter, die am gewaehlten Tag einen Einsatz haben.
+    private void InformDay(DateTime day)
+    {
+        var dayAss = _calAssignments.Where(a => a.Date.Date == day.Date).ToList();
+        if (dayAss.Count == 0) { MessageBox.Show("An diesem Tag gibt es keine Einsätze.", "Hinweis", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+
+        var teamMembers = _db.GetAllTeams().ToDictionary(t => t.Id, t => t.Members);
+        var empIds = new HashSet<int>();
+        foreach (var a in dayAss)
+        {
+            if (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var mem))
+                foreach (var m in mem) empIds.Add(m.Id);
+            else if (a.EmployeeId.HasValue) empIds.Add(a.EmployeeId.Value);
+        }
+        var employees = _db.GetAllEmployees().Where(e => empIds.Contains(e.Id)).OrderBy(e => e.LastName).ThenBy(e => e.FirstName).ToList();
+        var withMail = employees.Where(e => !string.IsNullOrWhiteSpace(e.Email)).ToList();
+        if (withMail.Count == 0) { MessageBox.Show("Keiner der betroffenen Mitarbeiter hat eine E-Mail-Adresse hinterlegt.", "Hinweis", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+
+        if (MessageBox.Show($"{withMail.Count} Mitarbeiter am {day:dd.MM.yyyy} per E-Mail informieren?", "Mitarbeiter informieren", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        var settings = _settings.Load();
+        var notify = new NotificationService(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KOFplanner"), _settings);
+        int done = 0, failed = 0;
+        foreach (var emp in withMail)
+        {
+            var empAss = dayAss.Where(a =>
+                (a.TeamId.HasValue && teamMembers.TryGetValue(a.TeamId.Value, out var mem) && mem.Any(m => m.Id == emp.Id)) ||
+                (a.EmployeeId.HasValue && a.EmployeeId.Value == emp.Id)).ToList();
+            try
+            {
+                var pdf = notify.GeneratePdf(emp, day.Date, day.Date, empAss);
+                var ics = Path.Combine(Path.GetTempPath(), $"Einsatz_{emp.Id}_{day:yyyyMMdd}.ics");
+                File.WriteAllText(ics, IcsExport.Build(empAss, day.Date, day.Date), new System.Text.UTF8Encoding(false));
+                if (notify.SendEmail(pdf, emp, settings, ics)) done++; else failed++;
+            }
+            catch (Exception ex) { MessageBox.Show($"{emp.FullName}: {ex.Message}", "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error); failed++; }
+        }
+        MessageBox.Show($"{done} E-Mail(s) gesendet, {failed} fehlgeschlagen.", "Ergebnis", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void DoExport()
@@ -772,7 +872,7 @@ public class MainForm : Form
         }
         else
         {
-            _currentMonth = _currentMonth.AddMonths(_twoMonthView ? step * 2 : step);
+            _currentMonth = _currentMonth.AddMonths(step);
             _dragStartDate = _dragEndDate = null;
             RefreshCalendar();
         }
@@ -812,6 +912,7 @@ public class MainForm : Form
         _vacations = _db.GetAllVacations();
         _sickness = _db.GetAllSickness();
         _calAssignments = _monthAssignments.Where(MatchesFilter).ToList();
+        BuildCollisionDays();
         BuildSpans();
         _calendarPanel.Invalidate();
     }
@@ -928,7 +1029,9 @@ public class MainForm : Form
         bool isToday = date == DateTime.Today;
         bool hasBlock = HasDayBlock(date);
         bool selected = _selectedDates.Contains(date.Date);
+        bool collision = _collisionDays.Contains(date.Date);
         var back = Color.White;
+        if (collision) back = Color.FromArgb(255, 199, 199); // Kollision: rot
         if (isToday) back = Color.FromArgb(255, 229, 204); // hellorange
         else if (IsInDragRange(date)) back = Color.FromArgb(200, 220, 255);
         else if (selected) back = Color.FromArgb(255, 240, 180); // Mehrfachauswahl: gelb
@@ -1098,6 +1201,20 @@ public class MainForm : Form
         if (_filterSiteId.HasValue && a.ConstructionSiteId != _filterSiteId.Value) return false;
         if (_filterTeamId.HasValue && (!a.TeamId.HasValue || a.TeamId.Value != _filterTeamId.Value)) return false;
         return true;
+    }
+
+    // Ermittelt Tage, an denen ein Mitarbeiter oder ein Fahrzeug mehrfach
+    // (auf unterschiedlichen Einsaetzen) belegt ist -> Kollisionswarnung.
+    private void BuildCollisionDays()
+    {
+        _collisionDays.Clear();
+        var byDay = _calAssignments.GroupBy(a => a.Date.Date);
+        foreach (var g in byDay)
+        {
+            bool conflict = g.GroupBy(a => a.EmployeeId).Any(x => x.Key.HasValue && x.Count() > 1)
+                         || g.GroupBy(a => a.VehicleId).Any(x => x.Key.HasValue && x.Count() > 1);
+            if (conflict) _collisionDays.Add(g.Key);
+        }
     }
 
     private void BuildSpans()
@@ -1372,7 +1489,10 @@ public class MainForm : Form
             if (d.HasValue && d != _dragCurrentDate)
             {
                 _dragCurrentDate = _dragEndDate = d;
-                _suppressClick = true;
+                // Nur unterdruecken, wenn sich der Tag aendert (= echtes Ziehen),
+                // nicht bei 1px-Mauszittern waehrend eines Klicks.
+                if (_dragStartDate.HasValue && d.Value.Date != _dragStartDate.Value.Date)
+                    _suppressClick = true;
                 _calendarPanel.Invalidate();
             }
         }
@@ -1409,6 +1529,14 @@ public class MainForm : Form
                 _suppressClick = true;
                 ShowDateRangePopup(_calendarPanel.PointToScreen(e.Location));
             }
+            else if (!_dragIsAssignment && _dragStartDate.HasValue && _dragEndDate.HasValue
+                     && _dragStartDate.Value.Date != _dragEndDate.Value.Date
+                     && _calAssignments.Any(a => a.Date.Date == _dragStartDate.Value.Date))
+            {
+                // Einsatz per Drag auf anderen Tag verschieben (ohne Umschalt/Strg).
+                _suppressClick = true;
+                ShowMovePopup(_calendarPanel.PointToScreen(e.Location));
+            }
         }
     }
 
@@ -1440,12 +1568,86 @@ public class MainForm : Form
     {
         if (e.Button != MouseButtons.Left) return;
         var d = GetDateFromPoint(e.Location);
-        if (d.HasValue) ShowDayOverview(d.Value);
+        if (d.HasValue)
+        {
+            if (_collisionDays.Contains(d.Value.Date))
+                ShowCollisionWarning(d.Value.Date);
+            else
+                ShowDayOverview(d.Value.Date);
+        }
+    }
+
+    private void ShowCollisionWarning(DateTime day)
+    {
+        var byEmp = _calAssignments.Where(a => a.Date.Date == day && a.EmployeeId.HasValue)
+            .GroupBy(a => a.EmployeeId!.Value).Where(g => g.Count() > 1);
+        var byVeh = _calAssignments.Where(a => a.Date.Date == day && a.VehicleId.HasValue)
+            .GroupBy(a => a.VehicleId!.Value).Where(g => g.Count() > 1);
+        var msg = new StringBuilder();
+        msg.AppendLine($"Kollision am {day:dd.MM.yyyy}:");
+        foreach (var g in byEmp)
+        {
+            var name = g.First().Employee?.FullName ?? $"MA {g.Key}";
+            msg.AppendLine($"  Mitarbeiter {name} doppelt: " +
+                string.Join(", ", g.Select(a => a.Site?.Name ?? "?")));
+        }
+        foreach (var g in byVeh)
+        {
+            var num = g.First().Vehicle?.VehicleNumber ?? $"FZ {g.Key}";
+            msg.AppendLine($"  Fahrzeug {num} doppelt: " +
+                string.Join(", ", g.Select(a => a.Site?.Name ?? "?")));
+        }
+        MessageBox.Show(msg.ToString(), "Kollisionswarnung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+
+    // Verschiebt alle Einsaetze des Starttags auf den (per Drag gewaehlten)
+    // Zieltag. Mehrtaegige Bloecke werden um die gleiche Tagesdifferenz
+    // verschoben.
+    private void ShowMovePopup(Point screenPos)
+    {
+        var from = _dragStartDate!.Value.Date;
+        var to = _dragEndDate!.Value.Date;
+        var moved = _calAssignments.Where(a => a.Date.Date == from).ToList();
+        if (moved.Count == 0) return;
+        var delta = (to - from).Days;
+
+        using var popup = new Form();
+        popup.Text = $"Einsätze verschieben: {from:dd.MM.yyyy} → {to:dd.MM.yyyy}";
+        popup.Size = new Size(360, 160);
+        popup.StartPosition = FormStartPosition.Manual;
+        popup.Location = new Point(Math.Max(0, screenPos.X - 180), Math.Max(0, screenPos.Y - 80));
+        popup.FormBorderStyle = FormBorderStyle.FixedDialog;
+        popup.MaximizeBox = false;
+        popup.MinimizeBox = false;
+        var lbl = new Label { Text = $"{moved.Count} Einsatz/Einsätze von {from:dd.MM.yyyy} nach {to:dd.MM.yyyy} verschieben?", Dock = DockStyle.Top, Padding = new Padding(10), AutoSize = true };
+        var flp = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(10) };
+        var btnOk = new Button { Text = "Verschieben", Width = 120, Height = 30, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Abbrechen", Width = 120, Height = 30, DialogResult = DialogResult.Cancel };
+        flp.Controls.AddRange(new Control[] { btnCancel, btnOk });
+        popup.Controls.Add(lbl); popup.Controls.Add(flp);
+        popup.CancelButton = btnCancel;
+        if (popup.ShowDialog(this) == DialogResult.OK)
+        {
+            foreach (var a in moved)
+            {
+                a.Date = a.Date.AddDays(delta);
+                _db.SaveAssignment(a);
+            }
+            RefreshAllData();
+        }
     }
 
     private ContextMenuStrip BuildCalendarContextMenu()
     {
         var cms = new ContextMenuStrip();
+        var miInformDay = new ToolStripMenuItem("Mitarbeiter dieses Tages informieren");
+        miInformDay.Click += (_, _) =>
+        {
+            var d = GetDateFromPoint(_calendarPanel.PointToClient(Cursor.Position));
+            if (d.HasValue) InformDay(d.Value);
+        };
+        cms.Items.Add(miInformDay);
+        cms.Items.Add(new ToolStripSeparator());
         var miDeleteSel = new ToolStripMenuItem("Ausgewählte Tage löschen");
         miDeleteSel.Click += (_, _) => DeleteSelectedDays();
         cms.Items.Add(miDeleteSel);
@@ -1456,7 +1658,7 @@ public class MainForm : Form
         {
             miDeleteSel.Enabled = _selectedDates.Count > 0;
             if (_selectedDates.Count == 0)
-                cms.Items[0].Text = "Tage mit Umschalt+Klick auswählen";
+                cms.Items[1].Text = "Tage mit Umschalt+Klick auswählen";
         };
         return cms;
     }
