@@ -1647,7 +1647,9 @@ public class MainForm : Form
         }
 
         // 2) Mehrtaetig? Frage je Einheit: nur ein Tag oder ganze Blocklaenge.
-        var toMove = new List<Assignment>();
+        // Wir merken uns je Assignment, ob er als ganzer Block verschoben wird
+        // (dann ist ein "Treffer" am Zieltag derselbe Block -> keine Kollision).
+        var toMove = new List<(Assignment A, bool Whole, MoveUnit U)>();
         foreach (var u in chosen)
         {
             bool whole = true;
@@ -1663,24 +1665,32 @@ public class MainForm : Form
                 whole = res == DialogResult.Yes;
             }
             if (whole)
-                toMove.AddRange(dayAss.Where(a => a.Date.Date >= u.First && a.Date.Date <= u.Last
+                foreach (var a in dayAss.Where(a => a.Date.Date >= u.First && a.Date.Date <= u.Last
                     && a.ConstructionSiteId == u.Key.Site && a.TeamId == u.Key.Team
-                    && a.VehicleId == u.Key.Vehicle && a.EmployeeId == u.Key.Employee).ToList());
+                    && a.VehicleId == u.Key.Vehicle && a.EmployeeId == u.Key.Employee).ToList())
+                    toMove.Add((a, true, u));
             else
-                toMove.AddRange(dayAss.Where(a => a.Date.Date == from
+                foreach (var a in dayAss.Where(a => a.Date.Date == from
                     && a.ConstructionSiteId == u.Key.Site && a.TeamId == u.Key.Team
-                    && a.VehicleId == u.Key.Vehicle && a.EmployeeId == u.Key.Employee).ToList());
+                    && a.VehicleId == u.Key.Vehicle && a.EmployeeId == u.Key.Employee).ToList())
+                    toMove.Add((a, false, u));
         }
         if (toMove.Count == 0) return;
 
-        // 3) Duplikat-Pruefung am Ziel: gleicher Termin darf am Zieltag nicht schon existieren.
-        var clash = toMove.FirstOrDefault(a =>
-            _calAssignments.Any(x => x.Id != a.Id && x.Date.Date == to
-                && x.ConstructionSiteId == a.ConstructionSiteId && x.TeamId == a.TeamId
-                && x.VehicleId == a.VehicleId && x.EmployeeId == a.EmployeeId));
-        if (clash != null)
+        // 3) Duplikat-Pruefung am Ziel: gleicher Termin darf am Zieltag nicht
+        // schon existieren - AUSGENOMMEN, wenn der Zieltag zum selben ganzen
+        // Block gehoert (erster Tag eines mehrtaegigen Termins auf einen
+        // spaeteren Tag desselben Termins = ganzer Block wird verschoben).
+        var clash = toMove.FirstOrDefault(t =>
         {
-            var name = clash.Site?.Name ?? "Termin";
+            if (t.Whole && to >= t.U.First && to <= t.U.Last) return false; // selber Block
+            return _calAssignments.Any(x => x.Id != t.A.Id && x.Date.Date == to
+                && x.ConstructionSiteId == t.A.ConstructionSiteId && x.TeamId == t.A.TeamId
+                && x.VehicleId == t.A.VehicleId && x.EmployeeId == t.A.EmployeeId);
+        });
+        if (clash.A != null)
+        {
+            var name = clash.A.Site?.Name ?? "Termin";
             MessageBox.Show($"Am {to:dd.MM.yyyy} existiert dieser Termin ({name}) bereits. Verschieben abgebrochen, um eine Kollision zu vermeiden.",
                 "Kollision am Zieltag", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
@@ -1690,10 +1700,10 @@ public class MainForm : Form
             "Verschieben", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
-        foreach (var a in toMove)
+        foreach (var t in toMove)
         {
-            a.Date = a.Date.AddDays(delta);
-            _db.SaveAssignment(a);
+            t.A.Date = t.A.Date.AddDays(delta);
+            _db.SaveAssignment(t.A);
         }
         RefreshAllData();
     }
