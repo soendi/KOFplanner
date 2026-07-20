@@ -179,6 +179,16 @@ public class DatabaseService
             up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (6)";
             up.ExecuteNonQuery();
         }
+
+        if (version < 7)
+        {
+            using var c9 = conn.CreateCommand();
+            c9.CommandText = "ALTER TABLE Assignments ADD COLUMN DayPart TEXT NOT NULL DEFAULT 'F'";
+            c9.ExecuteNonQuery();
+            using var up = conn.CreateCommand();
+            up.CommandText = "INSERT INTO SchemaVersion (Version) VALUES (7)";
+            up.ExecuteNonQuery();
+        }
     }
 
     public SqliteConnection GetConnection()
@@ -461,9 +471,11 @@ public class DatabaseService
         using var conn = GetConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT a.*, cs.Name, cs.Location, cs.StartDate, cs.EndDate,
+            SELECT a.Id, a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId, a.Date,
+                   cs.Name, cs.Location, cs.StartDate, cs.EndDate,
                    t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
-                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes
+                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes,
+                   a.DayPart
             FROM Assignments a
             JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
             LEFT JOIN Teams t ON a.TeamId = t.Id
@@ -500,6 +512,7 @@ public class DatabaseService
                 a.Vehicle = new Vehicle { Id = a.VehicleId ?? 0, RequiredLicense = r.GetString(11), VehicleNumber = r.GetString(12), LicensePlate = r.GetString(13) };
             if (!r.IsDBNull(14))
                 a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(14), LastName = r.GetString(15) };
+            a.Part = r.IsDBNull(r.GetOrdinal("DayPart")) ? DayPart.Full : DayPartHelper.FromCode(r.GetString(r.GetOrdinal("DayPart")));
             list.Add(a);
         }
         return list;
@@ -513,9 +526,11 @@ public class DatabaseService
         using var conn = GetConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT a.*, cs.Name, cs.Location,
+            SELECT a.Id, a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId, a.Date,
+                   cs.Name, cs.Location,
                    t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
-                   e.FirstName, e.LastName
+                   e.FirstName, e.LastName,
+                   a.DayPart
             FROM Assignments a
             JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
             LEFT JOIN Teams t ON a.TeamId = t.Id
@@ -544,6 +559,7 @@ public class DatabaseService
                 a.Vehicle = new Vehicle { Id = a.VehicleId ?? 0, RequiredLicense = r.GetString(9), VehicleNumber = r.GetString(10), LicensePlate = r.GetString(11) };
             if (!r.IsDBNull(12))
                 a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(12), LastName = r.GetString(13) };
+            a.Part = r.IsDBNull(r.GetOrdinal("DayPart")) ? DayPart.Full : DayPartHelper.FromCode(r.GetString(r.GetOrdinal("DayPart")));
             list.Add(a);
         }
         return list;
@@ -555,9 +571,11 @@ public class DatabaseService
         using var conn = GetConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT a.*, cs.Name, cs.Location, cs.StartDate, cs.EndDate,
+            SELECT a.Id, a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId, a.Date,
+                   cs.Name, cs.Location, cs.StartDate, cs.EndDate,
                    t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
-                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes
+                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes,
+                   a.DayPart
             FROM Assignments a
             JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
             LEFT JOIN Teams t ON a.TeamId = t.Id
@@ -587,6 +605,7 @@ public class DatabaseService
                 a.Vehicle = new Vehicle { Id = a.VehicleId ?? 0, RequiredLicense = r.GetString(11), VehicleNumber = r.GetString(12), LicensePlate = r.GetString(13) };
             if (!r.IsDBNull(14))
                 a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(14), LastName = r.GetString(15) };
+            a.Part = r.IsDBNull(r.GetOrdinal("DayPart")) ? DayPart.Full : DayPartHelper.FromCode(r.GetString(r.GetOrdinal("DayPart")));
             list.Add(a);
         }
         return list;
@@ -667,9 +686,11 @@ public class DatabaseService
         using var conn = GetConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT a.*, cs.Name, cs.Location, cs.StartDate, cs.EndDate,
+            SELECT a.Id, a.ConstructionSiteId, a.TeamId, a.VehicleId, a.EmployeeId, a.Date,
+                   cs.Name, cs.Location, cs.StartDate, cs.EndDate,
                    t.Name, v.Category, v.VehicleNumber, v.LicensePlate,
-                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes
+                   e.FirstName, e.LastName, cs.DistanceKm, cs.DurationMinutes,
+                   a.DayPart
             FROM Assignments a
             JOIN ConstructionSites cs ON a.ConstructionSiteId = cs.Id
             LEFT JOIN Teams t ON a.TeamId = t.Id
@@ -698,6 +719,7 @@ public class DatabaseService
                 a.Vehicle = new Vehicle { Id = a.VehicleId ?? 0, RequiredLicense = r.GetString(11), VehicleNumber = r.GetString(12), LicensePlate = r.GetString(13) };
             if (!r.IsDBNull(14))
                 a.Employee = new Employee { Id = a.EmployeeId ?? 0, FirstName = r.GetString(14), LastName = r.GetString(15) };
+            a.Part = r.IsDBNull(r.GetOrdinal("DayPart")) ? DayPart.Full : DayPartHelper.FromCode(r.GetString(r.GetOrdinal("DayPart")));
             list.Add(a);
         }
 
@@ -721,23 +743,25 @@ public class DatabaseService
         using var cmd = conn.CreateCommand();
         if (a.Id == 0)
         {
-            cmd.CommandText = "INSERT INTO Assignments (ConstructionSiteId, TeamId, VehicleId, EmployeeId, Date) VALUES (@cs, @t, @v, @e, @d); SELECT last_insert_rowid()";
+            cmd.CommandText = "INSERT INTO Assignments (ConstructionSiteId, TeamId, VehicleId, EmployeeId, Date, DayPart) VALUES (@cs, @t, @v, @e, @d, @p); SELECT last_insert_rowid()";
             cmd.Parameters.AddWithValue("@cs", a.ConstructionSiteId);
             cmd.Parameters.AddWithValue("@t", (object?)a.TeamId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@v", (object?)a.VehicleId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@e", (object?)a.EmployeeId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@d", a.Date.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("@p", a.Part.ToCode());
             a.Id = (int)(long)cmd.ExecuteScalar()!;
         }
         else
         {
-            cmd.CommandText = "UPDATE Assignments SET ConstructionSiteId=@cs, TeamId=@t, VehicleId=@v, EmployeeId=@e, Date=@d WHERE Id=@id";
+            cmd.CommandText = "UPDATE Assignments SET ConstructionSiteId=@cs, TeamId=@t, VehicleId=@v, EmployeeId=@e, Date=@d, DayPart=@p WHERE Id=@id";
             cmd.Parameters.AddWithValue("@id", a.Id);
             cmd.Parameters.AddWithValue("@cs", a.ConstructionSiteId);
             cmd.Parameters.AddWithValue("@t", (object?)a.TeamId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@v", (object?)a.VehicleId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@e", (object?)a.EmployeeId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@d", a.Date.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("@p", a.Part.ToCode());
             cmd.ExecuteNonQuery();
         }
     }
@@ -935,7 +959,7 @@ public class DatabaseService
     // True only if an assignment with the SAME site, team, vehicle AND employee already
     // exists on that day. A separate (e.g. overlapping/longer) assignment with a different
     // team or employee is allowed and must NOT be suppressed.
-    public bool IsDuplicateAssignment(int siteId, int? teamId, int? vehicleId, int? employeeId, DateTime date)
+    public bool IsDuplicateAssignment(int siteId, int? teamId, int? vehicleId, int? employeeId, DateTime date, DayPart part = DayPart.Full)
     {
         using var conn = GetConnection();
         using var cmd = conn.CreateCommand();
@@ -944,12 +968,14 @@ public class DatabaseService
             WHERE ConstructionSiteId=@sid AND Date=@d
               AND (TeamId IS NULL OR TeamId=@tid)
               AND (VehicleId IS NULL OR VehicleId=@vid)
-              AND (EmployeeId IS NULL OR EmployeeId=@eid)";
+              AND (EmployeeId IS NULL OR EmployeeId=@eid)
+              AND (DayPart='F' OR @dp='F' OR DayPart=@dp)";
         cmd.Parameters.AddWithValue("@sid", siteId);
         cmd.Parameters.AddWithValue("@d", date.ToString("yyyy-MM-dd"));
         cmd.Parameters.AddWithValue("@tid", (object?)teamId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@vid", (object?)vehicleId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@eid", (object?)employeeId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@dp", part.ToCode());
         return (long)cmd.ExecuteScalar()! > 0;
     }
 

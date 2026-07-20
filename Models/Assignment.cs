@@ -8,6 +8,7 @@ public class Assignment
     public int? VehicleId { get; set; }
     public int? EmployeeId { get; set; }
     public DateTime Date { get; set; }
+    public DayPart Part { get; set; } = DayPart.Full;
 
     public ConstructionSite? Site { get; set; }
     public Team? Team { get; set; }

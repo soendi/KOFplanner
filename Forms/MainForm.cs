@@ -15,8 +15,8 @@ public class MainForm : Form
     private readonly SettingsService _settings;
     private DateTime _currentMonth = new(DateTime.Now.Year, DateTime.Now.Month, 1);
     private DateTime _weekStart = MondayOf(new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day));
-    private bool _weekView;
-    private bool _twoMonthView;
+    private enum ViewMode { Month, Week, Day }
+    private ViewMode _view = ViewMode.Month;
     private DateTime? _hoverDate;
     private int _calendarDayWidth, _calendarDayHeight;
     private readonly Point _calendarOrigin = new(15, 45);
@@ -81,6 +81,7 @@ public class MainForm : Form
     private bool _dragIsAssignment;
     private bool _dragIsMove;
     private bool _suppressClick;
+    private DayPart _dragPart = DayPart.Full;
     private Point _dragStartPoint;
     private Team? _selectedTeam;
 
@@ -190,12 +191,13 @@ public class MainForm : Form
         var btnToday = new Button { Text = "Heute", Width = 60, Height = 28, Location = new Point(105, 6) };
         btnToday.Click += (_, _) => { _currentMonth = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1); _weekStart = MondayOf(DateTime.Today); _dragStartDate = _dragEndDate = null; RefreshCalendar(); };
         StyleButton(btnToday);
-        var btnView = new Button { Text = "Wochenansicht", Width = 120, Height = 28, Location = new Point(175, 6) };
+        var btnView = new Button { Text = "Monatsansicht", Width = 120, Height = 28, Location = new Point(175, 6) };
         btnView.Click += (_, _) =>
         {
-            if (_weekView) { _weekView = false; _twoMonthView = true; btnView.Text = "2-Monatsansicht"; }
-            else if (_twoMonthView) { _twoMonthView = false; _weekView = false; btnView.Text = "Wochenansicht"; }
-            else { _weekView = true; _weekStart = MondayOf(DateTime.Today); btnView.Text = "Monatsansicht"; }
+            if (_view == ViewMode.Month) { _view = ViewMode.Week; _weekStart = MondayOf(DateTime.Today); }
+            else if (_view == ViewMode.Week) { _view = ViewMode.Day; _weekStart = MondayOf(DateTime.Today); }
+            else { _view = ViewMode.Month; }
+            btnView.Text = _view switch { ViewMode.Week => "Wochenansicht", ViewMode.Day => "Tagesansicht", _ => "Monatsansicht" };
             _dragStartDate = _dragEndDate = null;
             RefreshCalendar();
         };
@@ -458,7 +460,7 @@ public class MainForm : Form
         if (DateTime.TryParse(q, out var parsed))
         {
             _currentMonth = new DateTime(parsed.Year, parsed.Month, 1);
-            if (_weekView) _weekStart = MondayOf(parsed);
+            if (_view != ViewMode.Month) _weekStart = MondayOf(parsed);
             _filterSiteId = null;
             _cmbSiteFilter.SelectedIndex = 0;
             RefreshCalendar();
@@ -607,9 +609,10 @@ public class MainForm : Form
 
     private (DateTime from, DateTime until) VisibleRange()
     {
-        if (_weekView) return (_weekStart, _weekStart.AddDays(6));
+        if (_view == ViewMode.Week) return (_weekStart, _weekStart.AddDays(6));
+        if (_view == ViewMode.Day) return (_weekStart, _weekStart);
         var gs = GridStartFor(_currentMonth);
-        return (gs, gs.AddDays(_twoMonthView ? 83 : 41));
+        return (gs, gs.AddDays(41));
     }
 
     private void PopulateEmployeeFilter()
@@ -865,18 +868,14 @@ public class MainForm : Form
 
     private void Navigate(int step)
     {
-        if (_weekView)
-        {
-            _weekStart = _weekStart.AddDays(step * 7);
-            _dragStartDate = _dragEndDate = null;
-            RefreshCalendar();
-        }
-        else
-        {
+        if (_view == ViewMode.Month)
             _currentMonth = _currentMonth.AddMonths(step);
-            _dragStartDate = _dragEndDate = null;
-            RefreshCalendar();
-        }
+        else if (_view == ViewMode.Week)
+            _weekStart = _weekStart.AddDays(step * 7);
+        else
+            _weekStart = _weekStart.AddDays(step);
+        _dragStartDate = _dragEndDate = null;
+        RefreshCalendar();
     }
 
     private static DateTime MondayOf(DateTime d)
@@ -887,18 +886,17 @@ public class MainForm : Form
 
     private void RefreshCalendar()
     {
-        if (_weekView)
+        if (_view == ViewMode.Week)
         {
             var mon = _weekStart;
             _lblMonthYear.Text = $"{mon:dd.MM.} – {mon.AddDays(6):dd.MM.yyyy}";
             _monthAssignments = _db.GetAllAssignments(mon, mon.AddDays(6));
         }
-        else if (_twoMonthView)
+        else if (_view == ViewMode.Day)
         {
-            var m1Start = GridStartFor(_currentMonth);
-            var m2End = GridStartFor(_currentMonth.AddMonths(1)).AddDays(41);
-            _lblMonthYear.Text = $"{_currentMonth:MMM yyyy}  +  {_currentMonth.AddMonths(1):MMM yyyy}";
-            _monthAssignments = _db.GetAllAssignments(m1Start, m2End);
+            var d = _weekStart;
+            _lblMonthYear.Text = d.ToString("dddd, dd. MMMM yyyy");
+            _monthAssignments = _db.GetAllAssignments(d, d);
         }
         else
         {
@@ -907,7 +905,7 @@ public class MainForm : Form
             // previous month and the leading days of the next month) so multi-day
             // assignments can be drawn continuously across the month boundary.
             var gs = GridStartFor(_currentMonth);
-            var ge = gs.AddDays(_twoMonthView ? 83 : 41);
+            var ge = gs.AddDays(41);
             _monthAssignments = _db.GetAllAssignments(gs, ge);
         }
         _vacations = _db.GetAllVacations();
@@ -925,59 +923,21 @@ public class MainForm : Form
         g.Clear(Color.White);
         var w = _calendarPanel.Width;
         var h = _calendarPanel.Height - _calendarOrigin.Y - 10;
-        _calendarDayWidth = (w - 30) / 7;
-        int rows = _weekView ? 1 : (_twoMonthView ? 12 : 6);
-        _calendarDayHeight = h / rows;
-        if (_calendarDayWidth < 10) return;
-
-        DateTime gridStart;
-        if (_weekView)
+        if (_view == ViewMode.Month)
         {
-            gridStart = _weekStart;
-        }
-        else
-        {
-            var firstDow = (int)_currentMonth.DayOfWeek;
-            var offset = firstDow == 0 ? 6 : firstDow - 1;
-            gridStart = new DateTime(_currentMonth.Year, _currentMonth.Month, 1).AddDays(-offset);
-        }
+            _calendarDayWidth = (w - 30) / 7;
+            int rows = 6;
+            _calendarDayHeight = h / rows;
+            if (_calendarDayWidth < 10) return;
 
-        var dayNames = new[] { "Mo", "Di", "Mi", "Do", "Fr", "Sa", "So" };
-        using var hf = new Font(Font, FontStyle.Bold);
-        using var hb = new SolidBrush(SystemColors.WindowText);
-        for (int i = 0; i < 7; i++)
-            g.DrawString(dayNames[i], hf, hb, _calendarOrigin.X + i * _calendarDayWidth + 5, _calendarOrigin.Y - 25);
+            DateTime gridStart = GridStartFor(_currentMonth);
 
-        var today = DateTime.Today;
+            var dayNames = new[] { "Mo", "Di", "Mi", "Do", "Fr", "Sa", "So" };
+            using var hf = new Font(Font, FontStyle.Bold);
+            using var hb = new SolidBrush(SystemColors.WindowText);
+            for (int i = 0; i < 7; i++)
+                g.DrawString(dayNames[i], hf, hb, _calendarOrigin.X + i * _calendarDayWidth + 5, _calendarOrigin.Y - 25);
 
-        // In 2-month view the two months are drawn as one continuous 12-week grid
-        // (no gap between them). In month view the 6 week-rows are drawn as usual.
-        if (_twoMonthView)
-        {
-            for (int row = 0; row < 12; row++)
-            {
-                for (int col = 0; col < 7; col++)
-                {
-                    var date = gridStart.AddDays(row * 7 + col);
-                    var x = _calendarOrigin.X + col * _calendarDayWidth;
-                    var y = _calendarOrigin.Y + row * _calendarDayHeight;
-                    DrawDayCell(g, date, x, y, _calendarDayWidth, _calendarDayHeight, false);
-                }
-            }
-            // Month labels at the top of each month block.
-            using var mf = new Font(Font, FontStyle.Bold);
-            using var mb = new SolidBrush(Color.DarkSlateGray);
-            g.DrawString(_currentMonth.ToString("MMMM yyyy"), mf, mb, _calendarOrigin.X + 2, _calendarOrigin.Y - 12);
-            var nextMon = _currentMonth.AddMonths(1);
-            // Find the row where the next month starts (first day of next month).
-            int nextRow = -1;
-            for (int r = 0; r < 12; r++)
-                if (gridStart.AddDays(r * 7).Month == nextMon.Month && gridStart.AddDays(r * 7).Year == nextMon.Year) { nextRow = r; break; }
-            if (nextRow >= 0)
-                g.DrawString(nextMon.ToString("MMMM yyyy"), mf, mb, _calendarOrigin.X + 2, _calendarOrigin.Y + nextRow * _calendarDayHeight - 12);
-        }
-        else
-        {
             for (int row = 0; row < rows; row++)
             {
                 for (int col = 0; col < 7; col++)
@@ -988,42 +948,149 @@ public class MainForm : Form
                     DrawDayCell(g, date, x, y, _calendarDayWidth, _calendarDayHeight, false);
                 }
             }
-        }
 
-        // Continuous bars for multi-day assignments (one bar spanning all days)
-        DrawSpanBars(g);
+            // Continuous bars for multi-day assignments (one bar spanning all days)
+            DrawSpanBars(g);
 
-        // Drag range highlight border
-        if (_dragStartDate.HasValue && _dragEndDate.HasValue)
-        {
-            var minD = _dragStartDate.Value < _dragEndDate.Value ? _dragStartDate.Value : _dragEndDate.Value;
-            var maxD = _dragStartDate.Value > _dragEndDate.Value ? _dragStartDate.Value : _dragEndDate.Value;
-            var (sx, sy) = GetCellPosition(minD);
-            var (ex, ey) = GetCellPosition(maxD);
-            if (sx >= 0 && ex >= 0)
+            // Drag range highlight border
+            if (_dragStartDate.HasValue && _dragEndDate.HasValue)
             {
-                var selRect = new Rectangle(sx, sy, ex - sx + _calendarDayWidth, ey - sy + _calendarDayHeight);
-                using var p = new Pen(Color.Blue, 2);
-                g.DrawRectangle(p, selRect);
+                var minD = _dragStartDate.Value < _dragEndDate.Value ? _dragStartDate.Value : _dragEndDate.Value;
+                var maxD = _dragStartDate.Value > _dragEndDate.Value ? _dragStartDate.Value : _dragEndDate.Value;
+                var (sx, sy) = GetCellPosition(minD);
+                var (ex, ey) = GetCellPosition(maxD);
+                if (sx >= 0 && ex >= 0)
+                {
+                    var selRect = new Rectangle(sx, sy, ex - sx + _calendarDayWidth, ey - sy + _calendarDayHeight);
+                    using var p = new Pen(Color.Blue, 2);
+                    g.DrawRectangle(p, selRect);
+                }
+            }
+
+            // Alt+hover zoom overlay (Shift is reserved for drag-move)
+            if (_hoverDate.HasValue && (ModifierKeys & Keys.Alt) != 0)
+            {
+                var (zx, zy) = GetCellPosition(_hoverDate.Value);
+                if (zx >= 0)
+                {
+                    var zx2 = (int)(zx - _calendarDayWidth * 0.4);
+                    var zy2 = (int)(zy - _calendarDayHeight * 0.4);
+                    var zw = (int)(_calendarDayWidth * 1.8);
+                    var zh = (int)(_calendarDayHeight * 1.8);
+                    using var shadow = new SolidBrush(Color.FromArgb(60, 0, 0, 0));
+                    g.FillRectangle(shadow, zx2 + 4, zy2 + 4, zw, zh);
+                    DrawDayCell(g, _hoverDate.Value, zx2, zy2, zw, zh, true);
+                }
             }
         }
-
-        // Alt+hover zoom overlay (Shift is reserved for drag-move)
-        if (_hoverDate.HasValue && (ModifierKeys & Keys.Alt) != 0)
+        else
         {
-            var (zx, zy) = GetCellPosition(_hoverDate.Value);
-            if (zx >= 0)
-            {
-                var zx2 = (int)(zx - _calendarDayWidth * 0.4);
-                var zy2 = (int)(zy - _calendarDayHeight * 0.4);
-                var zw = (int)(_calendarDayWidth * 1.8);
-                var zh = (int)(_calendarDayHeight * 1.8);
-                using var shadow = new SolidBrush(Color.FromArgb(60, 0, 0, 0));
-                g.FillRectangle(shadow, zx2 + 4, zy2 + 4, zw, zh);
-                DrawDayCell(g, _hoverDate.Value, zx2, zy2, zw, zh, true);
-            }
+            int dayCount = _view == ViewMode.Week ? 7 : 1;
+            DrawWeekDayView(g, w, h, dayCount);
         }
     }
+
+    // Shared band geometry for the week/day view so drawing and hit-testing agree.
+    private (int axisW, int headerH, int gtH, int bandH) WeekLayout(int h)
+    {
+        int axisW = 70;
+        int headerH = 32;
+        int bodyH = h - _calendarOrigin.Y - headerH - 10;
+        int gtH = Math.Max(34, (int)(bodyH * 0.16));
+        int bandH = (bodyH - gtH) / 2;
+        return (axisW, headerH, gtH, bandH);
+    }
+
+    private void DrawWeekDayView(Graphics g, int w, int h, int dayCount)
+    {
+        var (axisW, headerH, gtH, bandH) = WeekLayout(h);
+        int left = _calendarOrigin.X;
+        int top = _calendarOrigin.Y;
+        int gridW = w - left - 10;
+        int colW = gridW / dayCount;
+        int bodyTop = top + headerH;
+
+        // Axis labels for the three bands.
+        using var af = new Font(Font.FontFamily, 8.5f);
+        using var ab = new SolidBrush(SystemColors.WindowText);
+        g.DrawString("Ganztag", af, ab, 4, bodyTop + 4);
+        g.DrawString("Vormittag", af, ab, 4, bodyTop + gtH + 4);
+        g.DrawString("Nachmittag", af, ab, 4, bodyTop + gtH + bandH + 4);
+
+        using var lp = new Pen(Color.LightGray);
+        g.DrawLine(lp, axisW, bodyTop, w - 10, bodyTop);
+        g.DrawLine(lp, axisW, bodyTop + gtH, w - 10, bodyTop + gtH);
+        g.DrawLine(lp, axisW, bodyTop + gtH + bandH, w - 10, bodyTop + gtH + bandH);
+
+        var dayNames = new[] { "Mo", "Di", "Mi", "Do", "Fr", "Sa", "So" };
+        using var df = new Font(Font.FontFamily, 10f, FontStyle.Bold);
+
+        for (int c = 0; c < dayCount; c++)
+        {
+            var date = _weekStart.AddDays(c);
+            int x = left + c * colW;
+            bool isToday = date.Date == DateTime.Today;
+            bool collision = _collisionDays.Contains(date.Date);
+            var colBack = collision ? Color.FromArgb(255, 199, 199)
+                : (isToday ? Color.FromArgb(255, 240, 224) : Color.White);
+
+            // Day header
+            using (var hb2 = new SolidBrush(isToday ? Color.FromArgb(0xF2, 0x8A, 0x11) : SystemColors.WindowText))
+                g.DrawString($"{dayNames[((int)date.DayOfWeek + 6) % 7]} {date.Day:d2}.{date.Month:d2}.", df, hb2, x + 4, top + 6);
+
+            // Bands background
+            using (var gb = new SolidBrush(colBack)) g.FillRectangle(gb, x, bodyTop, colW, gtH);
+            using (var vbb = new SolidBrush(Color.FromArgb(248, 250, 252))) g.FillRectangle(vbb, x, bodyTop + gtH, colW, bandH);
+            using (var nbb = new SolidBrush(Color.FromArgb(252, 250, 248))) g.FillRectangle(nbb, x, bodyTop + gtH + bandH, colW, bandH);
+            using (var bp = new Pen(Color.LightGray))
+            {
+                g.DrawRectangle(bp, x, bodyTop, colW, gtH);
+                g.DrawRectangle(bp, x, bodyTop + gtH, colW, bandH);
+                g.DrawRectangle(bp, x, bodyTop + gtH + bandH, colW, bandH);
+            }
+
+            var dayAss = _calAssignments.Where(a => a.Date.Date == date.Date).ToList();
+            DrawBandBlocks(g, dayAss.Where(a => a.Part == DayPart.Full).ToList(), x, bodyTop, colW, gtH);
+            DrawBandBlocks(g, dayAss.Where(a => a.Part == DayPart.Morning).ToList(), x, bodyTop + gtH, colW, bandH);
+            DrawBandBlocks(g, dayAss.Where(a => a.Part == DayPart.Afternoon).ToList(), x, bodyTop + gtH + bandH, colW, bandH);
+        }
+    }
+
+    // Draws the appointment blocks inside a single band (Ganztag / Vormittag / Nachmittag).
+    private void DrawBandBlocks(Graphics g, List<Assignment> items, int x, int y, int w, int h)
+    {
+        if (items.Count == 0) return;
+        int pad = 2;
+        int blockH = Math.Max(14, (h - pad * (items.Count + 1)) / items.Count);
+        int yy = y + pad;
+        using var sf = new Font(Font.FontFamily, 7.5f);
+        foreach (var a in items)
+        {
+            var (label, fill, border, text) = BandLabel(a);
+            using (var fb = new SolidBrush(fill)) g.FillRectangle(fb, x + pad, yy, w - 2 * pad, blockH);
+            using (var bpb = new Pen(border, 1)) g.DrawRectangle(bpb, x + pad, yy, w - 2 * pad, blockH);
+            var txt = FitText(g, sf, label, w - 2 * pad - 4, 60);
+            using (var tb = new SolidBrush(text)) g.DrawString(txt, sf, tb, x + pad + 2, yy + 1);
+            yy += blockH + pad;
+        }
+    }
+
+    private (string Label, Color Fill, Color Border, Color Text) BandLabel(Assignment a)
+    {
+        if (a.TeamId.HasValue)
+        {
+            var site = a.Site!;
+            var team = _teams.FirstOrDefault(t => t.Id == a.TeamId.Value) ?? a.Team!;
+            var veh = a.Vehicle != null ? " / " + a.Vehicle.VehicleNumber : "";
+            return ($"{site.Name} / {team.Name}{veh}", team.Color, team.Color, Color.White);
+        }
+        if (a.VehicleId.HasValue)
+            return (a.Vehicle?.VehicleNumber ?? "Fahrzeug", Color.White, Color.Black, Color.Black);
+        if (a.EmployeeId.HasValue)
+            return ($"PN: {a.Employee?.FullName ?? "MA"}", Color.White, Color.Black, Color.Black);
+        return (a.Site?.Name ?? "Einsatz", Color.White, Color.Black, Color.Black);
+    }
+
 
     private void DrawDayCell(Graphics g, DateTime date, int x, int y, int cw, int ch, bool zoomed)
     {
@@ -1067,7 +1134,7 @@ public class MainForm : Form
 
     private void DrawDayLines(Graphics g, DateTime date, List<Assignment> day, int x, int y, int cw, int ch, bool zoomed)
     {
-        var lines = new List<(string Label, Color Fill, Color Border, Color Text)>();
+        var lines = new List<(string Label, Color Fill, Color Border, Color Text, DayPart Part)>();
 
         // Assignments that are part of a multi-day span are drawn as one continuous bar,
         // so their individual per-day lines (team, site, vehicle, employee) are suppressed in
@@ -1089,25 +1156,28 @@ public class MainForm : Form
                               .Select(a => a.Vehicle!).DistinctBy(v => v.Id)
                               .OrderBy(v => v.VehicleNumber).ToList();
             var vehicleText = vehicles.Count > 0 ? string.Join(", ", vehicles.Select(v => v.VehicleNumber)) : "–";
-            lines.Add(($"{site.Name} / {team.Name} / {vehicleText}{SpanSuffix(ta)}", color, color, Color.White));
+            lines.Add(($"{site.Name} / {team.Name} / {vehicleText}{SpanSuffix(ta)}", color, color, Color.White, ta.Part));
         }
 
         foreach (var site in visible.Select(a => a.Site).OfType<ConstructionSite>()
                      .Where(s => !connectedSiteIds.Contains(s.Id)).DistinctBy(s => s.Id).OrderBy(s => s.Name))
         {
-            lines.Add((site.Name + SpanSuffix(site.Id, null, null, null), Color.White, Color.Black, Color.Black));
+            var part = visible.FirstOrDefault(a => a.Site?.Id == site.Id)?.Part ?? DayPart.Full;
+            lines.Add((site.Name + SpanSuffix(site.Id, null, null, null), Color.White, Color.Black, Color.Black, part));
         }
 
         foreach (var v in visible.Select(a => a.Vehicle).OfType<Vehicle>()
                       .Where(v => !connectedSiteIds.Contains(v.Id == 0 ? -1 : visible.First(a => a.Vehicle != null && a.Vehicle.Id == v.Id).ConstructionSiteId))
                       .DistinctBy(v => v.Id).OrderBy(v => v.VehicleNumber))
         {
-            lines.Add((v.VehicleNumber + SpanSuffix(null, null, v.Id, null), Color.White, Color.Black, Color.Black));
+            var part = visible.FirstOrDefault(a => a.Vehicle?.Id == v.Id)?.Part ?? DayPart.Full;
+            lines.Add((v.VehicleNumber + SpanSuffix(null, null, v.Id, null), Color.White, Color.Black, Color.Black, part));
         }
 
         foreach (var emp in visible.Select(a => a.Employee).OfType<Employee>().DistinctBy(e => e.Id).OrderBy(e => e.FullName))
         {
-            lines.Add(($"PN: {emp.FullName}{SpanSuffix(null, null, null, emp.Id)}", Color.White, Color.Black, Color.Black));
+            var part = visible.FirstOrDefault(a => a.Employee?.Id == emp.Id)?.Part ?? DayPart.Full;
+            lines.Add(($"PN: {emp.FullName}{SpanSuffix(null, null, null, emp.Id)}", Color.White, Color.Black, Color.Black, part));
         }
 
         // Vacation / Sickness (light gray bars)
@@ -1117,40 +1187,56 @@ public class MainForm : Form
         {
             var name = vac.Employee?.FullName ?? $"MA {vac.EmployeeId}";
             var suffix = vac.StartDate.Date == vac.EndDate.Date ? "" : $" ({vac.StartDate:dd.MM.}–{vac.EndDate:dd.MM.})";
-            lines.Add(($"Urlaub: {name}{suffix}", grayFill, grayBorder, Color.Black));
+            lines.Add(($"Urlaub: {name}{suffix}", grayFill, grayBorder, Color.Black, DayPart.Full));
         }
         foreach (var sic in _sickness.Where(s => date >= s.StartDate.Date && date <= s.EndDate.Date))
         {
             var name = sic.Employee?.FullName ?? $"MA {sic.EmployeeId}";
             var suffix = sic.StartDate.Date == sic.EndDate.Date ? "" : $" ({sic.StartDate:dd.MM.}–{sic.EndDate:dd.MM.})";
-            lines.Add(($"Krank: {name}{suffix}", grayFill, grayBorder, Color.Black));
+            lines.Add(($"Krank: {name}{suffix}", grayFill, grayBorder, Color.Black, DayPart.Full));
         }
 
         using var sf = new Font(Font.FontFamily, zoomed ? 9 : 7);
-        int ly = y + (zoomed ? 22 : 16);
-        // Verfuegbarer Platz fuer die Detailzeilen; bei vielen Einsaetzen
-        // pro Tag werden die Zeilen automatisch duenner, damit KEINE
-        // Zeile eine andere ueberlappt (jede bleibt einzeln sichtbar).
-        var topStart = ly;
-        var bottom = y + ch - 2;
-        var avail = bottom - topStart;
-        var lineH = zoomed ? 18 : 14;
-        if (lines.Count > 0 && lines.Count * (lineH + 1) > avail)
-            lineH = Math.Max(8, (avail - (lines.Count - 1)) / lines.Count);
+        var bodyTop = y + (zoomed ? 22 : 16);
+        var bodyBottom = y + ch - 2;
+        var zoneH = (bodyBottom - bodyTop) / 3;
         var maxChars = zoomed ? 80 : Math.Max(8, cw / 6);
-        for (int li = 0; li < lines.Count; li++)
+
+        // Faint "V" (Vormittag) / "N" (Nachmittag) zone markers.
+        if (!zoomed && ch > 60)
         {
-            var (label, lf, lb, lt) = lines[li];
-            var lx = x + 2;
-            var lw = cw - 4;
-            using var fb = new SolidBrush(lf);
-            g.FillRectangle(fb, lx, ly, lw, lineH);
-            using var bp = new Pen(lb, 1);
-            g.DrawRectangle(bp, lx, ly, lw, lineH);
-            var detail = FitText(g, sf, label, lw - 4, maxChars);
-            using var tb = new SolidBrush(lt);
-            g.DrawString(detail, sf, tb, lx + 2, ly + Math.Max(0, (lineH - 8) / 2));
-            ly += lineH + 1;
+            using var zf = new Font(Font.FontFamily, 6, FontStyle.Italic);
+            using var zb = new SolidBrush(Color.FromArgb(0xAA, 0xAA, 0xAA));
+            g.DrawString("V", zf, zb, x + cw - 9, bodyTop + 1);
+            g.DrawString("N", zf, zb, x + cw - 9, bodyTop + zoneH * 2 + 1);
+        }
+
+        // Each half-day zone gets its own stacked block of detail lines.
+        var parts = new[] { DayPart.Full, DayPart.Morning, DayPart.Afternoon };
+        for (int pi = 0; pi < parts.Length; pi++)
+        {
+            var part = parts[pi];
+            var ztop = bodyTop + pi * zoneH;
+            var grp = lines.Where(l => l.Part == part).ToList();
+            if (grp.Count == 0) continue;
+            var lineH = 14;
+            var avail = zoneH - 2;
+            if (grp.Count * (lineH + 1) > avail)
+                lineH = Math.Max(8, (avail - (grp.Count - 1)) / grp.Count);
+            var ly = ztop + 1;
+            foreach (var (label, lf, lb, lt, _) in grp)
+            {
+                var lx = x + 2;
+                var lw = cw - 4;
+                using var fb = new SolidBrush(lf);
+                g.FillRectangle(fb, lx, ly, lw, lineH);
+                using var bp = new Pen(lb, 1);
+                g.DrawRectangle(bp, lx, ly, lw, lineH);
+                var detail = FitText(g, sf, label, lw - 4, maxChars);
+                using var tb = new SolidBrush(lt);
+                g.DrawString(detail, sf, tb, lx + 2, ly + Math.Max(0, (lineH - 8) / 2));
+                ly += lineH + 1;
+            }
         }
     }
 
@@ -1213,14 +1299,21 @@ public class MainForm : Form
 
     // Ermittelt Tage, an denen ein Mitarbeiter oder ein Fahrzeug mehrfach
     // (auf unterschiedlichen Einsaetzen) belegt ist -> Kollisionswarnung.
+    // Halbtage (Vormittag/Nachmittag) kollidieren nur, wenn sie sich
+    // zeitlich ueberschneiden (siehe DayPartHelper.Overlaps).
     private void BuildCollisionDays()
     {
         _collisionDays.Clear();
         var byDay = _calAssignments.GroupBy(a => a.Date.Date);
         foreach (var g in byDay)
         {
-            bool conflict = g.GroupBy(a => a.EmployeeId).Any(x => x.Key.HasValue && x.Count() > 1)
-                         || g.GroupBy(a => a.VehicleId).Any(x => x.Key.HasValue && x.Count() > 1);
+            bool conflict =
+                g.Select(a => a.EmployeeId).Where(x => x.HasValue).Distinct().Any(id =>
+                    g.Where(a => a.EmployeeId == id).Select(a => a.Part).Distinct()
+                        .Any(p1 => g.Where(a => a.EmployeeId == id).Select(a => a.Part).Distinct().Any(p2 => p1 != p2 && DayPartHelper.Overlaps(p1, p2))))
+                || g.Select(a => a.VehicleId).Where(x => x.HasValue).Distinct().Any(id =>
+                    g.Where(a => a.VehicleId == id).Select(a => a.Part).Distinct()
+                        .Any(p1 => g.Where(a => a.VehicleId == id).Select(a => a.Part).Distinct().Any(p2 => p1 != p2 && DayPartHelper.Overlaps(p1, p2))));
             if (conflict) _collisionDays.Add(g.Key);
         }
     }
@@ -1399,8 +1492,7 @@ public class MainForm : Form
 
     private DateTime GridStart()
     {
-        if (_weekView) return _weekStart;
-        if (_twoMonthView) return GridStartFor(_currentMonth);
+        if (_view == ViewMode.Week) return _weekStart;
         return GridStartFor(_currentMonth);
     }
 
@@ -1421,14 +1513,14 @@ public class MainForm : Form
     // Returns (row, col) within the visible grid, or (-1,-1) when the date is not shown.
     private (int row, int col) CellRowCol(DateTime date)
     {
-        if (_weekView)
+        if (_view == ViewMode.Week)
         {
             if (date < _weekStart || date > _weekStart.AddDays(6)) return (-1, -1);
             var idx = (date - _weekStart).Days;
             return (0, idx);
         }
         var gs = GridStart();
-        var span = (_twoMonthView ? 84 : 42);
+        var span = 42;
         var diff = (date - gs).Days;
         if (diff < 0 || diff >= span) return (-1, -1);
         return (diff / 7, diff % 7);
@@ -1439,30 +1531,56 @@ public class MainForm : Form
     // white so spans continue seamlessly across the boundary.
     private bool IsFocusDate(DateTime date)
     {
-        if (_weekView) return true;
-        if (date.Year == _currentMonth.Year && date.Month == _currentMonth.Month) return true;
-        if (_twoMonthView)
-        {
-            var overNext = _currentMonth.AddMonths(2);
-            if (date.Year == overNext.Year && date.Month == overNext.Month) return true;
-        }
-        return false;
+        if (_view == ViewMode.Week) return true;
+        return date.Year == _currentMonth.Year && date.Month == _currentMonth.Month;
     }
 
     private DateTime? GetDateFromPoint(Point p)
     {
+        if (_view != ViewMode.Month) return null;
         if (_calendarDayWidth <= 0 || _calendarDayHeight <= 0) return null;
         var col = (p.X - _calendarOrigin.X) / _calendarDayWidth;
         var row = (p.Y - _calendarOrigin.Y) / _calendarDayHeight;
         if (col < 0 || col > 6) return null;
-        var maxRow = _weekView ? 0 : (_twoMonthView ? 11 : 5);
+        var maxRow = 5;
         if (row < 0 || row > maxRow) return null;
         var gridStart = GridStart();
         var date = gridStart.AddDays(row * 7 + col);
-        if (_weekView) return date;
-        // In month/2-month view the (row,col) is always a real visible cell, so no
-        // further month filtering is needed.
         return date;
+    }
+
+    // Week/Day view: maps a point to the (date, day-part) band it falls into.
+    private (DateTime date, DayPart part)? GetCellPartFromPoint(Point p)
+    {
+        if (_view == ViewMode.Month) return null;
+        int w = _calendarPanel.Width, h = _calendarPanel.Height;
+        var (axisW, headerH, gtH, bandH) = WeekLayout(h);
+        int left = _calendarOrigin.X, top = _calendarOrigin.Y;
+        int gridW = w - left - 10;
+        int dayCount = _view == ViewMode.Week ? 7 : 1;
+        int colW = gridW / dayCount;
+        int bodyTop = top + headerH;
+        if (p.X < left || p.X > left + gridW || p.Y < top) return null;
+        int c = (p.X - left) / colW;
+        if (c < 0 || c >= dayCount) return null;
+        var date = _weekStart.AddDays(c);
+        int rel = p.Y - bodyTop;
+        DayPart part;
+        if (rel < 0 || rel < gtH) part = DayPart.Full;
+        else if (rel < gtH + bandH) part = DayPart.Morning;
+        else part = DayPart.Afternoon;
+        return (date, part);
+    }
+
+    // View-aware hit test: returns the date (and, in week/day view, the day-part) under the point.
+    private (DateTime date, DayPart part)? HitAt(Point p)
+    {
+        if (_view == ViewMode.Month)
+        {
+            var d = GetDateFromPoint(p);
+            return d.HasValue ? (d.Value, DayPart.Full) : null;
+        }
+        return GetCellPartFromPoint(p);
     }
 
     private Color GetSiteColor(int id)
@@ -1476,13 +1594,15 @@ public class MainForm : Form
     {
         if (e.Button == MouseButtons.Left)
         {
-            var d = GetDateFromPoint(e.Location);
-            if (d.HasValue)
+            var hit = HitAt(e.Location);
+            if (hit.HasValue)
             {
+                var d = hit.Value.date;
                 _isDragging = true;
                 _suppressClick = false;
                 _dragIsAssignment = (ModifierKeys & Keys.Control) != 0;
                 _dragIsMove = (ModifierKeys & Keys.Shift) != 0;
+                _dragPart = hit.Value.part;
                 _dragStartDate = _dragEndDate = _dragCurrentDate = d;
                 _dragStartPoint = e.Location;
                 _calendarPanel.Invalidate();
@@ -1494,7 +1614,8 @@ public class MainForm : Form
     {
         if (_isDragging)
         {
-            var d = GetDateFromPoint(e.Location);
+            var hit = HitAt(e.Location);
+            var d = hit?.date;
             if (d.HasValue && d != _dragCurrentDate)
             {
                 _dragCurrentDate = _dragEndDate = d;
@@ -1507,7 +1628,7 @@ public class MainForm : Form
         }
         else
         {
-            _calendarPanel.Cursor = GetDateFromPoint(e.Location).HasValue ? Cursors.Hand : Cursors.Default;
+            _calendarPanel.Cursor = HitAt(e.Location).HasValue ? Cursors.Hand : Cursors.Default;
             // Tages-Zoom jetzt mit ALT+Hover (Shift ist fuer Drag-Verschieben reserviert).
             if ((ModifierKeys & Keys.Alt) != 0)
             {
@@ -1546,6 +1667,13 @@ public class MainForm : Form
                 _suppressClick = true;
                 ShowMovePopup(_calendarPanel.PointToScreen(e.Location));
             }
+            else if (_suppressClick && _dragStartDate.HasValue && _dragEndDate.HasValue)
+            {
+                // Leere Flaeche ueber einen/mehrere Tage ziehen -> neuen Termin anlegen
+                // (Baustelle/Team/Mitarbeiter im Zusammenfassungs-Dialog kombinierbar).
+                _suppressClick = true;
+                ShowDateRangePopup(_calendarPanel.PointToScreen(e.Location));
+            }
         }
     }
 
@@ -1576,14 +1704,22 @@ public class MainForm : Form
     private void Calendar_MouseDoubleClick(object? sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left) return;
-        var d = GetDateFromPoint(e.Location);
-        if (d.HasValue)
+        var hit = HitAt(e.Location);
+        if (!hit.HasValue) return;
+        var d = hit.Value.date;
+        if (_collisionDays.Contains(d.Date) && (ModifierKeys & Keys.Alt) == 0)
         {
-            if (_collisionDays.Contains(d.Value.Date) && (ModifierKeys & Keys.Alt) == 0)
-                ShowCollisionWarning(d.Value.Date);
-            else if ((ModifierKeys & Keys.Alt) != 0)
-                ShowDayOverview(d.Value.Date);
-            // normaler Doppelklick ohne Alt: keine Aktion (Alt+Hover ist der Zoom)
+            ShowCollisionWarning(d.Date);
+        }
+        else if ((ModifierKeys & Keys.Alt) != 0 || _calAssignments.Any(a => a.Date.Date == d.Date))
+        {
+            ShowDayOverview(d.Date);
+        }
+        else
+        {
+            // Leere Flaeche: neuen Termin anlegen (Baustelle/Team/Mitarbeiter kombinierbar).
+            _dragStartDate = _dragEndDate = d;
+            ShowDateRangePopup(_calendarPanel.PointToScreen(e.Location));
         }
     }
 
