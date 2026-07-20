@@ -1719,6 +1719,7 @@ public class MainForm : Form
         {
             // Leere Flaeche: neuen Termin anlegen (Baustelle/Team/Mitarbeiter kombinierbar).
             _dragStartDate = _dragEndDate = d;
+            _dragPart = hit.Value.part;
             ShowDateRangePopup(_calendarPanel.PointToScreen(e.Location));
         }
     }
@@ -1956,19 +1957,20 @@ public class MainForm : Form
 
         var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(15, 12, 15, 12), WrapContents = false };
 
-        flow.Controls.Add(new Label { Text = $"Zeitraum: {rangeStr}", Font = new Font(Font, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 0, 0, 8) });
+        var partTxt = _dragPart == DayPart.Morning ? " (Vormittag)" : _dragPart == DayPart.Afternoon ? " (Nachmittag)" : " (Ganztägig)";
+        flow.Controls.Add(new Label { Text = $"Zeitraum: {rangeStr}{partTxt}", Font = new Font(Font, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 0, 0, 8) });
         flow.Controls.Add(new Label { Text = "Zuweisungen", ForeColor = SystemColors.GrayText, AutoSize = true, Margin = new Padding(0, 4, 0, 4) });
 
         var btnSite = new Button { Text = "Baustelle zuweisen", Width = 290, Height = 38 };
-        btnSite.Click += (_, _) => { popup.Close(); AssignSiteToRange(from, until); }; StyleButton(btnSite);
+        btnSite.Click += (_, _) => { popup.Close(); AssignSiteToRange(from, until, _dragPart); }; StyleButton(btnSite);
         flow.Controls.Add(btnSite);
 
         var btnTeamAssign = new Button { Text = "Team zuweisen", Width = 290, Height = 38 };
-        btnTeamAssign.Click += (_, _) => { popup.Close(); AssignTeamToRange(from, until); }; StyleButton(btnTeamAssign);
+        btnTeamAssign.Click += (_, _) => { popup.Close(); AssignTeamToRange(from, until, _dragPart); }; StyleButton(btnTeamAssign);
         flow.Controls.Add(btnTeamAssign);
 
         var btnEmpAssign = new Button { Text = "Mitarbeiter zuweisen", Width = 290, Height = 38 };
-        btnEmpAssign.Click += (_, _) => { popup.Close(); AssignEmployeeToRange(from, until); }; StyleButton(btnEmpAssign);
+        btnEmpAssign.Click += (_, _) => { popup.Close(); AssignEmployeeToRange(from, until, _dragPart); }; StyleButton(btnEmpAssign);
         flow.Controls.Add(btnEmpAssign);
 
         flow.Controls.Add(new Label { Text = "Abwesenheiten", ForeColor = SystemColors.GrayText, AutoSize = true, Margin = new Padding(0, 8, 0, 4) });
@@ -2477,7 +2479,7 @@ public class MainForm : Form
     }
 
     // ====== RANGE ACTIONS ======
-    private void AssignSiteToRange(DateTime from, DateTime until)
+    private void AssignSiteToRange(DateTime from, DateTime until, DayPart part = DayPart.Full)
     {
         var site = SelectSite();
         if (site == null) return;
@@ -2487,10 +2489,10 @@ public class MainForm : Form
         {
             for (var d = from; d <= until; d = d.AddDays(1))
             {
-                if (!_db.IsDuplicateAssignment(site.Id, team.Id, null, null, d))
-                    _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, TeamId = team.Id, Date = d });
+                if (!_db.IsDuplicateAssignment(site.Id, team.Id, null, null, d, part))
+                    _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, TeamId = team.Id, Date = d, Part = part });
             }
-            CheckAutoVehicleAssignment(team, site.Id, from, until);
+            CheckAutoVehicleAssignment(team, site.Id, from, until, part);
         }
         else
         {
@@ -2499,15 +2501,15 @@ public class MainForm : Form
             {
                 for (var d = from; d <= until; d = d.AddDays(1))
                 {
-                    if (!_db.IsEmployeeOnVacationOrSick(emp.Id, d) && !_db.IsDuplicateAssignment(site.Id, null, null, emp.Id, d))
-                        _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, EmployeeId = emp.Id, Date = d });
+                    if (!_db.IsEmployeeOnVacationOrSick(emp.Id, d) && !_db.IsDuplicateAssignment(site.Id, null, null, emp.Id, d, part))
+                        _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, EmployeeId = emp.Id, Date = d, Part = part });
                 }
             }
         }
         RefreshCalendar();
     }
 
-    private void CheckAutoVehicleAssignment(Team team, int siteId, DateTime from, DateTime until)
+    private void CheckAutoVehicleAssignment(Team team, int siteId, DateTime from, DateTime until, DayPart part = DayPart.Full)
     {
         // Team already has a preferred vehicle -> attach it to the team's rows on the days it is free.
         if (team.PreferredVehicleId.HasValue)
@@ -2516,7 +2518,7 @@ public class MainForm : Form
             if (pref != null)
             {
                 for (var d = from; d <= until; d = d.AddDays(1))
-                    LinkVehicleToTeamRow(siteId, team.Id, pref.Id, d);
+                    LinkVehicleToTeamRow(siteId, team.Id, pref.Id, d, part);
                 return;
             }
         }
@@ -2568,7 +2570,7 @@ public class MainForm : Form
             // Commit: first the team link, then the appointment entries (attached to the team rows).
             _db.SaveTeam(team);
             for (var d = from; d <= until; d = d.AddDays(1))
-                LinkVehicleToTeamRow(siteId, team.Id, sel.Id, d);
+                LinkVehicleToTeamRow(siteId, team.Id, sel.Id, d, part);
             return;
         }
     }
@@ -2598,7 +2600,7 @@ public class MainForm : Form
 
     // Attaches the vehicle to the team's assignment row on a given day so the span bar groups
     // team + vehicle together. Creates or updates the row as needed (only on days the vehicle is free).
-    private void LinkVehicleToTeamRow(int siteId, int teamId, int vehicleId, DateTime day)
+    private void LinkVehicleToTeamRow(int siteId, int teamId, int vehicleId, DateTime day, DayPart part = DayPart.Full)
     {
         if (_db.IsVehicleAssigned(vehicleId, day)) return;
         var existing = _db.GetTeamAssignmentOnDay(teamId, day);
@@ -2609,11 +2611,11 @@ public class MainForm : Form
         }
         else if (!_db.IsSiteAssigned(siteId, day) && !_db.IsTeamAssigned(teamId, day))
         {
-            _db.SaveAssignment(new Assignment { ConstructionSiteId = siteId, TeamId = teamId, VehicleId = vehicleId, Date = day });
+            _db.SaveAssignment(new Assignment { ConstructionSiteId = siteId, TeamId = teamId, VehicleId = vehicleId, Date = day, Part = part });
         }
     }
 
-    private void AssignTeamToRange(DateTime from, DateTime until)
+    private void AssignTeamToRange(DateTime from, DateTime until, DayPart part = DayPart.Full)
     {
         var team = SelectTeam();
         if (team == null) return;
@@ -2621,14 +2623,14 @@ public class MainForm : Form
         if (site == null) return;
 
         for (var d = from; d <= until; d = d.AddDays(1))
-            if (!_db.IsDuplicateAssignment(site.Id, team.Id, null, null, d))
-                _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, TeamId = team.Id, Date = d });
+            if (!_db.IsDuplicateAssignment(site.Id, team.Id, null, null, d, part))
+                _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, TeamId = team.Id, Date = d, Part = part });
 
-        CheckAutoVehicleAssignment(team, site.Id, from, until);
+        CheckAutoVehicleAssignment(team, site.Id, from, until, part);
         RefreshCalendar();
     }
 
-    private void AssignEmployeeToRange(DateTime from, DateTime until)
+    private void AssignEmployeeToRange(DateTime from, DateTime until, DayPart part = DayPart.Full)
     {
         var emp = SelectEmployee();
         if (emp == null) return;
@@ -2642,8 +2644,8 @@ public class MainForm : Form
                 MessageBox.Show($"{emp.FullName} ist am {d:dd.MM.yyyy} nicht verfügbar.", "Konflikt");
                 continue;
             }
-            if (!_db.IsDuplicateAssignment(site.Id, null, null, emp.Id, d))
-                _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, EmployeeId = emp.Id, Date = d });
+            if (!_db.IsDuplicateAssignment(site.Id, null, null, emp.Id, d, part))
+                _db.SaveAssignment(new Assignment { ConstructionSiteId = site.Id, EmployeeId = emp.Id, Date = d, Part = part });
         }
         RefreshCalendar();
     }
