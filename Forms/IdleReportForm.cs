@@ -96,7 +96,7 @@ public class IdleReportForm : Form
 
     private static void StyleButton(Button btn)
     {
-        btn.Font = new Font("Segoe UI", 9.5f);
+        btn.Font = new Font("Segoe UI", 9f);
         btn.TextAlign = ContentAlignment.MiddleCenter;
     }
 }

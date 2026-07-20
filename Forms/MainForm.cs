@@ -88,7 +88,7 @@ public class MainForm : Form
     private static void StyleButton(Button btn)
     {
         // Native Windows-Standard-Schaltflaeche (kein eigenes Material-Theme).
-        btn.Font = new Font("Segoe UI", 9.5f);
+        btn.Font = new Font("Segoe UI", 9f);
         btn.TextAlign = ContentAlignment.MiddleCenter;
     }
 
@@ -205,13 +205,13 @@ public class MainForm : Form
             _filterTeamId = _cmbTeamFilter.SelectedValue is int id && id > 0 ? id : null;
             RefreshCalendar();
         };
-        var btnResetFilter = new Button { Text = "Filter zurücksetzen", Location = new Point(1002, 8), Width = 130, Height = 23, FlatStyle = FlatStyle.Flat, Font = new Font(Font.FontFamily, 9) };
+        var btnResetFilter = new Button { Text = "Filter zurücksetzen", Location = new Point(1002, 8), Width = 130, Height = 23 };
         btnResetFilter.Click += (_, _) => ResetFilters();
         StyleButton(btnResetFilter);
-        var btnPrintCal = new Button { Text = "Kalender drucken", Location = new Point(1138, 8), Width = 120, Height = 23, FlatStyle = FlatStyle.Flat, Font = new Font(Font.FontFamily, 9) };
+        var btnPrintCal = new Button { Text = "Kalender drucken", Location = new Point(1138, 8), Width = 120, Height = 23 };
         btnPrintCal.Click += (_, _) => PrintCalendar();
         StyleButton(btnPrintCal);
-        var btnSearch = new Button { Text = "Suchen", Location = new Point(1263, 8), Width = 80, Height = 23, FlatStyle = FlatStyle.Flat, Font = new Font(Font.FontFamily, 9) };
+        var btnSearch = new Button { Text = "Suchen", Location = new Point(1263, 8), Width = 80, Height = 23 };
         btnSearch.Click += (_, _) => CalendarSearch();
         StyleButton(btnSearch);
         _txtCalendarSearch = new TextBox { Location = new Point(1350, 8), Width = 150, Font = new Font(Font.FontFamily, 9) };
@@ -1865,7 +1865,7 @@ public class MainForm : Form
         var selected = new List<MoveUnit>();
         foreach (var u in units)
         {
-            var btn = new Button { Text = u.Label, Width = 400, Height = 30, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlatStyle = FlatStyle.Flat };
+            var btn = new Button { Text = u.Label, Width = 400, Height = 30, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
             btn.Click += (_, _) => { selected.Add(u); dlg.DialogResult = DialogResult.OK; };
             flp.Controls.Add(btn);
         }
@@ -2996,12 +2996,10 @@ public class MainForm : Form
         card.Controls.Add(lblVeh);
 
         var btnEdit = new Button { Text = "Bearb.", Width = 46, Height = 28, Left = card.Width - 98, Top = 6, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = SystemColors.HotTrack, TextAlign = ContentAlignment.MiddleCenter };
-        btnEdit.FlatStyle = FlatStyle.Flat;
         btnEdit.Click += (_, _) => { EditTeam(team); };
         card.Controls.Add(btnEdit);
 
-        var btnDel = new Button { Text = "X", Width = 46, Height = 28, Left = card.Width - 48, Top = 6, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.Red, TextAlign = ContentAlignment.MiddleCenter };
-        btnDel.FlatStyle = FlatStyle.Flat;
+        var btnDel = new Button { Text = "X", Width = 46, Height = 28, Left = card.Width - 48, Top = 6, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.Red, TextAlign = ContentAlignment.MiddleCenter };
         btnDel.Click += (_, _) => { DeleteTeam(team); };
         card.Controls.Add(btnDel);
 
