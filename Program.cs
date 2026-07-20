@@ -27,6 +27,9 @@ static class Program
         {
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();
+            // System-Schrift (Segoe UI) + nativer Windows-Renderer fuer MenuStrip/ToolStrip.
+            Application.SetDefaultFont(new Font("Segoe UI", 9f));
+            ToolStripManager.Renderer = new ToolStripSystemRenderer();
             Application.SetCompatibleTextRenderingDefault(false);
 
             var dbPath = Path.Combine(dbDir, "kofplanner.db");

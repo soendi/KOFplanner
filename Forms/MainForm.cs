@@ -87,16 +87,9 @@ public class MainForm : Form
 
     private static void StyleButton(Button btn)
     {
-        btn.FlatStyle = FlatStyle.Flat;
-        btn.FlatAppearance.BorderSize = 1;
-        btn.FlatAppearance.BorderColor = Color.FromArgb(0x1B, 0x5E, 0x20);
-        btn.BackColor = Color.FromArgb(0x2E, 0x7D, 0x32);
-        btn.ForeColor = Color.White;
-        btn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-        btn.Cursor = Cursors.Hand;
+        // Native Windows-Standard-Schaltflaeche (kein eigenes Material-Theme).
+        btn.Font = new Font("Segoe UI", 9.5f);
         btn.TextAlign = ContentAlignment.MiddleCenter;
-        btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(0x1B, 0x5E, 0x20);
-        btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(0x00, 0x5C, 0x00);
     }
 
     public MainForm(DatabaseService db, BackupService backup, UpdateService update, SettingsService settings)
@@ -155,18 +148,8 @@ public class MainForm : Form
 
         // Main TabControl. Reserve exactly the tab-strip height so nothing is clipped.
         _tabControl = new TabControl { Dock = DockStyle.Fill, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(260, 42), Padding = new Point(0, 0) };
-        _tabControl.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-        _tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
-        _tabControl.DrawItem += (s, e) =>
-        {
-            var tab = _tabControl;
-            var bg = e.State.HasFlag(DrawItemState.Selected) ? Color.FromArgb(0x2E, 0x7D, 0x32) : SystemColors.Control;
-            var fg = e.State.HasFlag(DrawItemState.Selected) ? Color.White : Color.FromArgb(0x33, 0x33, 0x33);
-            using var b = new SolidBrush(bg);
-            e.Graphics.FillRectangle(b, e.Bounds);
-            TextRenderer.DrawText(e.Graphics, tab.TabPages[e.Index].Text, tab.Font, e.Bounds, fg, bg,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-        };
+        _tabControl.Font = new Font("Segoe UI", 9.5f);
+        _tabControl.DrawMode = TabDrawMode.Normal;
         layout.Controls.Add(_tabControl, 0, 1);
         Controls.Add(layout);
 
@@ -288,23 +271,23 @@ public class MainForm : Form
         _flowTeamCards.Resize += (_, _) => LayoutTeamCards();
         _pnlNewTeamDropZone = new Panel
         {
-            Height = 76, BackColor = Color.FromArgb(0xE8, 0xF5, 0xE9),
+            Height = 76, BackColor = SystemColors.Control,
             BorderStyle = BorderStyle.FixedSingle, AllowDrop = true, Margin = new Padding(0, 20, 0, 12),
             Cursor = Cursors.Hand
         };
         _pnlNewTeamDropZone.Paint += (s, e) =>
         {
             using var f = new Font("Segoe UI", 11, FontStyle.Bold);
-            using var b = new SolidBrush(Color.FromArgb(0x2E, 0x7D, 0x32));
+            using var b = new SolidBrush(SystemColors.WindowText);
             var txt = "+ Neues Team  (Mitarbeiter hierher ziehen)";
             var sz = e.Graphics.MeasureString(txt, f);
             e.Graphics.DrawString(txt, f, b, (_pnlNewTeamDropZone.Width - sz.Width) / 2, (_pnlNewTeamDropZone.Height - sz.Height) / 2);
         };
-        _pnlNewTeamDropZone.DragEnter += (s, e) => { if (e.Data!.GetDataPresent(typeof(Employee))) { e.Effect = DragDropEffects.Move; _pnlNewTeamDropZone.BackColor = Color.FromArgb(0xD8, 0xF0, 0xDC); } };
-        _pnlNewTeamDropZone.DragLeave += (_, _) => _pnlNewTeamDropZone.BackColor = Color.FromArgb(0xE8, 0xF5, 0xE9);
+        _pnlNewTeamDropZone.DragEnter += (s, e) => { if (e.Data!.GetDataPresent(typeof(Employee))) { e.Effect = DragDropEffects.Move; _pnlNewTeamDropZone.BackColor = SystemColors.ControlLight; } };
+        _pnlNewTeamDropZone.DragLeave += (_, _) => _pnlNewTeamDropZone.BackColor = SystemColors.Control;
         _pnlNewTeamDropZone.DragDrop += (s, e) =>
         {
-            _pnlNewTeamDropZone.BackColor = Color.FromArgb(0xE8, 0xF5, 0xE9);
+            _pnlNewTeamDropZone.BackColor = SystemColors.Control;
             if (e.Data!.GetData(typeof(Employee)) is Employee emp)
                 CreateTeamFromEmployee(emp);
         };
@@ -810,8 +793,7 @@ public class MainForm : Form
                 if (e.Button == MouseButtons.Left && lbl.Parent is Panel p && p.ClientRectangle.Contains(e.Location) && e.Location.X < line.Width - 30)
                     lbl.DoDragDrop(dragData(), DragDropEffects.Move);
             };
-        var btnX = new Button { Text = "X", Width = 26, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand };
-        btnX.FlatAppearance.BorderSize = 0;
+        var btnX = new Button { Text = "X", Width = 26, Height = 24 };
         btnX.Location = new Point(line.Width - 26 - 2, 4);
         btnX.Click += (_, _) => onDelete();
         line.Controls.Add(lbl);
@@ -1103,12 +1085,12 @@ public class MainForm : Form
         if (isToday) back = Color.FromArgb(255, 229, 204); // hellorange
         else if (IsInDragRange(date)) back = Color.FromArgb(200, 220, 255);
         else if (selected) back = Color.FromArgb(255, 240, 180); // Mehrfachauswahl: gelb
-        else if (!IsFocusDate(date)) back = Color.FromArgb(0xD6, 0xE8, 0xF5); // außerhalb des Fokus-Monats: hellblau
+        else if (!IsFocusDate(date)) back = Color.FromArgb(0xE3, 0xEE, 0xF7); // außerhalb des Fokus-Monats: hellblau
         else if (hasBlock) back = Color.FromArgb(225, 225, 225); // Urlaub/Krankheit: grau
         else if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) back = Color.FromArgb(248, 248, 248);
         using var bb = new SolidBrush(back);
         g.FillRectangle(bb, x, y, cw, ch);
-        using var p2 = new Pen(zoomed ? Color.FromArgb(0x2E, 0x7D, 0x32)
+        using var p2 = new Pen(zoomed ? SystemColors.Highlight
             : isToday ? Color.FromArgb(0xF2, 0x8A, 0x11)
             : Color.FromArgb(0xBB, 0xBB, 0xBB), zoomed ? 2 : (isToday ? 2 : 1));
         g.DrawRectangle(p2, x, y, cw, ch);
@@ -2024,7 +2006,7 @@ public class MainForm : Form
                 {
                     Text = site.Name,
                     Font = new Font(Font, FontStyle.Bold | FontStyle.Underline),
-                    ForeColor = Color.FromArgb(0x1B, 0x5E, 0x20),
+                    ForeColor = SystemColors.HotTrack,
                     AutoSize = true,
                     Margin = new Padding(0, 12, 0, 4)
                 });
@@ -2078,7 +2060,7 @@ public class MainForm : Form
             {
                 Text = "Urlaub",
                 Font = new Font(Font, FontStyle.Bold | FontStyle.Underline),
-                ForeColor = Color.FromArgb(0x2E, 0x7D, 0x32),
+                ForeColor = SystemColors.HotTrack,
                 AutoSize = true,
                 Margin = new Padding(0, 12, 0, 4)
             });
@@ -2141,9 +2123,8 @@ public class MainForm : Form
         var height = Math.Max(28, textH + 12);
         var line = new Panel { Width = parentWidth - 44, Height = height, Margin = new Padding(8, 0, 0, 4), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
         var lbl = new Label { Text = text, Location = new Point(6, 6), AutoSize = true, MaximumSize = new Size(innerWidth - 12, 0), Font = Font };
-        var btnX = new Button { Text = "X", Width = 28, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand };
+        var btnX = new Button { Text = "X", Width = 28, Height = 24 };
         StyleButton(btnX);
-        btnX.FlatAppearance.BorderSize = 0;
         btnX.Location = new Point(line.Width - 28 - 2, (height - 24) / 2);
         btnX.Click += (_, _) => onDelete();
         line.Controls.Add(lbl);
@@ -2247,7 +2228,7 @@ public class MainForm : Form
         dlg.Font = Font;
         dlg.Controls.Add(new Label { Text = $"{entry.Label.Replace("\n", "  ")}\n{entry.From:dd.MM.yyyy} – {entry.To:dd.MM.yyyy}", Location = new Point(16, 16), AutoSize = true });
         dlg.Controls.Add(new Label { Text = "Wie soll gelöscht werden?", Location = new Point(16, 56), AutoSize = true });
-        var btnWhole = new Button { Text = "Ganzer Termin", Location = new Point(16, 110), Width = 195, Height = 38, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
+        var btnWhole = new Button { Text = "Ganzer Termin", Location = new Point(16, 110), Width = 195, Height = 38 };
         StyleButton(btnWhole);
         var btnDay = new Button { Text = "Nur an diesem Tag", Location = new Point(229, 110), Width = 195, Height = 38 };
         StyleButton(btnDay);
@@ -2421,7 +2402,7 @@ public class MainForm : Form
         var btnKeep = new Button { Text = "Nicht löschen", Location = new Point(16, 130), Width = 210, Height = 40 };
         var btnDelete = new Button { Text = "Löschen", Location = new Point(244, 130), Width = 210, Height = 40 };
         var btnReplace = new Button { Text = "Anderes Fahrzeug wählen", Location = new Point(16, 184), Width = 210, Height = 40 };
-        var btnWhole = new Button { Text = "Ganzen Termin löschen", Location = new Point(244, 184), Width = 210, Height = 40, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White };
+        var btnWhole = new Button { Text = "Ganzen Termin löschen", Location = new Point(244, 184), Width = 210, Height = 40 };
         StyleButton(btnKeep); StyleButton(btnDelete); StyleButton(btnReplace); StyleButton(btnWhole);
 
         var result = DialogResult.Cancel;
@@ -3014,7 +2995,7 @@ public class MainForm : Form
         var lblVeh = new Label { Text = prefVeh != null ? $"Fahrzeug: {prefVeh.VehicleNumber}" : "kein Fahrzeug", AutoSize = false, Height = 16, Left = 12, Top = 72, Width = card.Width - 24, Font = new Font("Segoe UI", 8, FontStyle.Italic), ForeColor = fg };
         card.Controls.Add(lblVeh);
 
-        var btnEdit = new Button { Text = "Bearb.", Width = 46, Height = 28, Left = card.Width - 98, Top = 6, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = Color.FromArgb(0x1B, 0x5E, 0x20), TextAlign = ContentAlignment.MiddleCenter };
+        var btnEdit = new Button { Text = "Bearb.", Width = 46, Height = 28, Left = card.Width - 98, Top = 6, Cursor = Cursors.Hand, BackColor = Color.White, ForeColor = SystemColors.HotTrack, TextAlign = ContentAlignment.MiddleCenter };
         btnEdit.FlatStyle = FlatStyle.Flat;
         btnEdit.Click += (_, _) => { EditTeam(team); };
         card.Controls.Add(btnEdit);

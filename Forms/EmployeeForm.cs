@@ -78,7 +78,7 @@ public class EmployeeForm : Form
         tlp.SetColumnSpan(vacPanel, 2);
 
         var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.LeftToRight, Height = 40 };
-        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, Cursor = Cursors.Hand };
+        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80 };
         btnOk.Click += (_, _) => Save();
         var btnCancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 80, FlatStyle = FlatStyle.Flat };
         btnPanel.Controls.AddRange(new Control[] { btnOk, btnCancel });
@@ -120,8 +120,7 @@ public class EmployeeForm : Form
                 : $"{v.StartDate:dd.MM.yyyy} – {v.EndDate:dd.MM.yyyy}";
             if (!string.IsNullOrWhiteSpace(v.Notes)) text += $"  ({v.Notes})";
             var lbl = new Label { Text = text, Location = new Point(6, 5), AutoSize = true };
-            var btnX = new Button { Text = "X", Width = 24, Height = 22, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand };
-            btnX.FlatAppearance.BorderSize = 0;
+            var btnX = new Button { Text = "X", Width = 24, Height = 22 };
             btnX.Location = new Point(row.Width - 24 - 2, 2);
             var vid = v.Id;
             btnX.Click += (_, _) =>

@@ -134,8 +134,7 @@ public class VacationSicknessForm : Form
     {
         var line = new Panel { Width = Math.Max(200, parentWidth - 24), Height = 32, Margin = new Padding(0, 0, 0, 4), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
         var lbl = new Label { Text = text, Location = new Point(6, 4), AutoSize = true, MaximumSize = new Size(line.Width - 40, 0), Padding = new Padding(0, 3, 0, 0) };
-        var btnX = new Button { Text = "X", Width = 26, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0xF4, 0x43, 0x36), ForeColor = Color.White, Cursor = Cursors.Hand };
-        btnX.FlatAppearance.BorderSize = 0;
+        var btnX = new Button { Text = "X", Width = 26, Height = 24 };
         btnX.Location = new Point(line.Width - 26 - 2, 4);
         btnX.Click += (_, _) => onDelete();
         line.Controls.Add(lbl);

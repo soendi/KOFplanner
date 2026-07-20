@@ -96,9 +96,7 @@ public class IdleReportForm : Form
 
     private static void StyleButton(Button btn)
     {
-        btn.FlatStyle = FlatStyle.Flat;
-        btn.BackColor = Color.FromArgb(0x2E, 0x7D, 0x32);
-        btn.ForeColor = Color.White;
-        btn.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+        btn.Font = new Font("Segoe UI", 9.5f);
+        btn.TextAlign = ContentAlignment.MiddleCenter;
     }
 }

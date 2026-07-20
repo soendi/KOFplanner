@@ -92,7 +92,7 @@ public class TeamForm : Form
         // ---- Row 3: OK / Abbrechen ----
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var btnCancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 100, Height = 30 };
-        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 100, Height = 30, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, Cursor = Cursors.Hand };
+        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 100, Height = 30 };
         btnOk.Click += (_, _) => Save();
         bottom.Controls.AddRange(new Control[] { btnCancel, btnOk });
         tlp.Controls.Add(bottom, 0, 3);
@@ -180,7 +180,7 @@ public class TeamForm : Form
         {
             var item = new ListViewItem(new[] { v.VehicleNumber, v.RequiredLicense, v.LicensePlate }) { Tag = v };
             if (_team.PreferredVehicleId.HasValue && v.Id == _team.PreferredVehicleId.Value)
-                item.BackColor = Color.FromArgb(0xD8, 0xF0, 0xDC);
+                item.BackColor = SystemColors.ControlLight;
             _lvVehicles.Items.Add(item);
         }
         var last = _lvVehicles.Columns[_lvVehicles.Columns.Count - 1];

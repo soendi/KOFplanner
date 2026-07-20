@@ -62,7 +62,7 @@ public class InformEmployeesForm : UserControl
 
         // ---- Button ----
         var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        var btnSend = new Button { Text = "Infos verschicken", Width = 150, Height = 30, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+        var btnSend = new Button { Text = "Infos verschicken", Width = 150, Height = 30 };
         btnSend.Click += (_, _) => Inform();
         flp.Controls.Add(btnSend);
         tlp.Controls.Add(flp, 0, 2);
@@ -363,7 +363,7 @@ internal sealed class InformPreviewForm : Form
         tlp.Controls.Add(grid, 0, 0);
 
         var flp = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
-        var btnOk = new Button { Text = "Senden", Width = 120, Height = 32, BackColor = Color.FromArgb(0x2E, 0x7D, 0x32), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, DialogResult = DialogResult.OK };
+        var btnOk = new Button { Text = "Senden", Width = 120, Height = 32, DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Abbrechen", Width = 120, Height = 32, DialogResult = DialogResult.Cancel };
         btnOk.Click += (_, _) =>
         {
