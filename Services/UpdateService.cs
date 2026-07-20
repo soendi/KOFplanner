@@ -68,8 +68,12 @@ public class UpdateService
         Directory.CreateDirectory(tempDir);
         var installerPath = Path.Combine(tempDir, "KOFplanner-Setup.exe");
 
+        // Ggf. Rest von fehlgeschlagenem Vorversuch entfernen (sonst evtl. Lock).
+        try { if (File.Exists(installerPath)) File.Delete(installerPath); } catch { }
+
         using (var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
         {
+            client.DefaultRequestHeaders.UserAgent.TryParseAdd("KOFplanner");
             using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             if (!response.IsSuccessStatusCode)
                 throw new Exception($"Download fehlgeschlagen (HTTP {(int)response.StatusCode}). Datei im Release nicht gefunden?");

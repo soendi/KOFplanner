@@ -5,6 +5,10 @@ namespace KOFplanner;
 
 static class Program
 {
+    // Vom Installer (AppMutex in installer.iss) genutzt, um die laufende
+    // Instanz waehrend eines Self-Updates sauber zu schliessen.
+    private static readonly Mutex _appMutex = new(false, "KOFplannerAppMutex");
+
     [STAThread]
     static void Main()
     {

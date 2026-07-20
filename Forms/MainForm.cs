@@ -3274,7 +3274,7 @@ public class MainForm : Form
     private async Task RunUpdate(Version v)
     {
         using var prog = new UpdateProgressForm();
-        prog.Show();
+        prog.Show(this);
         _update.DownloadProgress += p => prog.SetProgress(p);
         try
         {
