@@ -82,6 +82,9 @@ public class VacationSicknessForm : Form
         tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
 
         Controls.Add(tlp);
+
+        this.Load += (_, _) => RelayoutRows();
+        this.Resize += (_, _) => RelayoutRows();
     }
 
     private void LoadVacations()
@@ -96,7 +99,7 @@ public class VacationSicknessForm : Form
             var range = v.StartDate.Date == v.EndDate.Date ? v.StartDate.ToString("dd.MM.yyyy") : $"{v.StartDate:dd.MM.yyyy} – {v.EndDate:dd.MM.yyyy}";
             var text = $"{name}  |  {range}" + (string.IsNullOrWhiteSpace(v.Notes) ? "" : $"  ({v.Notes})");
             var vid = v.Id;
-            _flowVacations.Controls.Add(MakeDeletableRow(_flowVacations.Width, text, () =>
+            _flowVacations.Controls.Add(MakeDeletableRow(_flowVacations, text, () =>
             {
                 if (MessageBox.Show($"Urlaub löschen?\n{text}", "Urlaub löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
@@ -119,7 +122,7 @@ public class VacationSicknessForm : Form
             var range = s.StartDate.Date == s.EndDate.Date ? s.StartDate.ToString("dd.MM.yyyy") : $"{s.StartDate:dd.MM.yyyy} – {s.EndDate:dd.MM.yyyy}";
             var text = $"{name}  |  {range}" + (string.IsNullOrWhiteSpace(s.Notes) ? "" : $"  ({s.Notes})");
             var sid = s.Id;
-            _flowSickness.Controls.Add(MakeDeletableRow(_flowSickness.Width, text, () =>
+            _flowSickness.Controls.Add(MakeDeletableRow(_flowSickness, text, () =>
             {
                 if (MessageBox.Show($"Krankheit löschen?\n{text}", "Krankheit löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
@@ -130,16 +133,38 @@ public class VacationSicknessForm : Form
         }
     }
 
-    private static Panel MakeDeletableRow(int parentWidth, string text, Action onDelete)
+    private static Panel MakeDeletableRow(FlowLayoutPanel flow, string text, Action onDelete)
     {
-        var line = new Panel { Width = Math.Max(200, parentWidth - 24), Height = 32, Margin = new Padding(0, 0, 0, 4), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
-        var lbl = new Label { Text = text, Location = new Point(6, 4), AutoSize = true, MaximumSize = new Size(line.Width - 40, 0), Padding = new Padding(0, 3, 0, 0) };
+        int w = Math.Max(200, flow.ClientSize.Width - 24);
+        var line = new Panel { Width = w, Height = 32, Margin = new Padding(0, 0, 0, 4), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window };
+        var lbl = new Label { Text = text, Location = new Point(6, 4), AutoSize = true, MaximumSize = new Size(w - 40, 0), Padding = new Padding(0, 3, 0, 0) };
         var btnX = new Button { Text = "X", Width = 26, Height = 24 };
-        btnX.Location = new Point(line.Width - 26 - 2, 4);
+        btnX.Location = new Point(w - 26 - 2, 4);
         btnX.Click += (_, _) => onDelete();
         line.Controls.Add(lbl);
         line.Controls.Add(btnX);
+        line.Tag = btnX;
         return line;
+    }
+
+    private void RelayoutRows()
+    {
+        Relayout(_flowVacations);
+        Relayout(_flowSickness);
+    }
+
+    private static void Relayout(FlowLayoutPanel flow)
+    {
+        if (flow.ClientSize.Width <= 0) return;
+        foreach (Control c in flow.Controls)
+        {
+            if (c is Panel line && line.Tag is Button btnX)
+            {
+                int w = Math.Max(200, flow.ClientSize.Width - 24);
+                line.Width = w;
+                btnX.Location = new Point(w - 26 - 2, 4);
+            }
+        }
     }
 
     private void AddEntry()

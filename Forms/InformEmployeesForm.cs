@@ -21,11 +21,12 @@ public class InformEmployeesForm : UserControl
 
         Font = new Font("Segoe UI", 9.5f);
 
-        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(12) };
+        var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(12) };
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));   // Zeitraum
         tlp.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // Listen (3 Spalten)
         tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));   // Button
-        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));  // Protokoll
+        tlp.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Protokoll-Beschriftung
+        tlp.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));  // Protokoll-Textfeld
 
         // ---- Zeitraum ----
         var pnlRange = new Panel { Dock = DockStyle.Fill };
@@ -70,7 +71,7 @@ public class InformEmployeesForm : UserControl
         // ---- Protokoll ----
         tlp.Controls.Add(new Label { Text = "Protokoll:", Anchor = AnchorStyles.Top }, 0, 3);
         _txtLog = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, ReadOnly = true };
-        tlp.Controls.Add(_txtLog, 0, 3);
+        tlp.Controls.Add(_txtLog, 0, 4);
 
         Controls.Add(tlp);
         UpdateRangeDates();

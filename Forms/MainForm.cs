@@ -100,7 +100,7 @@ public class MainForm : Form
         _backup = backup;
         _update = update;
         Text = "KOFplanner - Baustelleneinsatzplanung v" + _update.CurrentVersion;
-        Size = new Size(1400, 850);
+        Size = new Size(1600, 850);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9.5f);
 
@@ -205,18 +205,18 @@ public class MainForm : Form
             _filterTeamId = _cmbTeamFilter.SelectedValue is int id && id > 0 ? id : null;
             RefreshCalendar();
         };
-        var btnResetFilter = new Button { Text = "Filter zurücksetzen", Location = new Point(1002, 8), Width = 130, Height = 23 };
+        var btnResetFilter = new Button { Text = "Filter zurücksetzen", Location = new Point(1002, 8), Width = 140, Height = 23 };
         btnResetFilter.Click += (_, _) => ResetFilters();
         StyleButton(btnResetFilter);
-        var btnPrintCal = new Button { Text = "Kalender drucken", Location = new Point(1138, 8), Width = 120, Height = 23 };
+        var btnPrintCal = new Button { Text = "Kalender drucken", Location = new Point(1150, 8), Width = 120, Height = 23 };
         btnPrintCal.Click += (_, _) => PrintCalendar();
         StyleButton(btnPrintCal);
-        var btnSearch = new Button { Text = "Suchen", Location = new Point(1263, 8), Width = 80, Height = 23 };
+        var btnSearch = new Button { Text = "Suchen", Location = new Point(1500, 8), Width = 80, Height = 23 };
         btnSearch.Click += (_, _) => CalendarSearch();
         StyleButton(btnSearch);
-        _txtCalendarSearch = new TextBox { Location = new Point(1350, 8), Width = 150, Font = new Font(Font.FontFamily, 9) };
+        _txtCalendarSearch = new TextBox { Location = new Point(1340, 8), Width = 150, Font = new Font(Font.FontFamily, 9) };
         _txtCalendarSearch.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; CalendarSearch(); } };
-        var lblSearch = new Label { Text = "Suche (Datum/Baustelle):", Location = new Point(1150, 11), AutoSize = true, Font = new Font(Font.FontFamily, 9) };
+        var lblSearch = new Label { Text = "Suche:", Location = new Point(1280, 11), AutoSize = true, Font = new Font(Font.FontFamily, 9) };
         nav.Controls.AddRange(new Control[] { btnPrev, btnNext, btnToday, btnView, _lblMonthYear, lblFilter, _cmbEmployeeFilter, _cmbSiteFilter, _cmbTeamFilter, btnResetFilter, btnPrintCal, lblSearch, _txtCalendarSearch, btnSearch });
         tabKalender.Controls.Add(_calendarPanel);
         tabKalender.Controls.Add(nav);

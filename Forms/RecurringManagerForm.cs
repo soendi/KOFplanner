@@ -16,7 +16,7 @@ public class RecurringManagerForm : Form
         _db = db;
         IconHelper.Apply(this);
         Text = "Wiederkehrende Einsätze";
-        Size = new System.Drawing.Size(640, 400);
+        Size = new System.Drawing.Size(700, 400);
         StartPosition = FormStartPosition.CenterParent;
         BuildUi();
         RefreshList();
@@ -25,12 +25,12 @@ public class RecurringManagerForm : Form
     private void BuildUi()
     {
         _lv = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, MultiSelect = false };
-        _lv.Columns.Add("Baustelle", 150);
-        _lv.Columns.Add("Team", 100);
-        _lv.Columns.Add("Fahrzeug", 90);
-        _lv.Columns.Add("Mitarbeiter", 130);
-        _lv.Columns.Add("Wochentage", 160);
-        _lv.Columns.Add("Zeitraum", 120);
+        _lv.Columns.Add("Baustelle", 130);
+        _lv.Columns.Add("Team", 95);
+        _lv.Columns.Add("Fahrzeug", 85);
+        _lv.Columns.Add("Mitarbeiter", 115);
+        _lv.Columns.Add("Wochentage", 130);
+        _lv.Columns.Add("Zeitraum", 105);
         _lv.DoubleClick += (_, _) => EditSelected();
 
         var tlp = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };

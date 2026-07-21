@@ -19,7 +19,7 @@ public class SettingsForm : Form
         Text = "Einstellungen";
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(480, 560);
-        MinimumSize = new Size(480, 420);
+        MinimumSize = new Size(480, 480);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
         MinimizeBox = false;
